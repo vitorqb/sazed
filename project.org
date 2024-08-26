@@ -1,0 +1,16 @@
+* Core Concepts
+
+Sazed goal is to never let you forget a CLI command. It's core principle is
+pretty simple:
+
+1. Store CLI commands
+2. Allow user to easily search for a CLI command (based on content or description)
+3. Run the command for the user
+
+* POC
+
+Minimal requirements:
+
+1. Store command & description
+2. Search for command & description
+3. Invoke from shell & run command
