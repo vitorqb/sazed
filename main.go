@@ -1,27 +1,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"os"
+
+	"gopkg.in/yaml.v3"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// memory represents a memorized CLI command with it's context.
-type memory struct {
-	command     string
-	description string
+// Memory represents a memorized CLI command with it's context.
+type Memory struct {
+	Command     string
+	Description string
 }
 
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type model struct {
-	memories []memory
+	memories []Memory
 	cursor   int
 }
 
 func initialModel() model {
 	return model{
-		memories: []memory{},
+		memories: []Memory{},
 		cursor:   0,
 	}
 }
@@ -48,11 +52,34 @@ func (m model) View() string {
 	header := "Please select a command"
 	body := ""
 	for _, memory := range m.memories {
-		body += fmt.Sprintf("[%5.5s] [%s]", memory.command, memory.description)
+		body += fmt.Sprintf("[%5.5s] [%s]", memory.Command, memory.Description)
 	}
 	return header + "\n" + body
 }
 
+type CLIOptions struct {
+	MemoriesFile string
+}
+
+func ParseCliArgs(x []string) (CLIOptions, error) {
+	var cliOpts CLIOptions
+	flagSet := flag.NewFlagSet("sazed", flag.ContinueOnError)
+	flagSet.StringVar(&cliOpts.MemoriesFile, "memories-file", "", "File to read memories from")
+	err := flagSet.Parse(x)
+	if err != nil {
+		return cliOpts, err
+	}
+	if (cliOpts.MemoriesFile == "") {
+		return cliOpts, fmt.Errorf("Missing memories file (--memories-file)")
+	}
+	return cliOpts, nil
+}
+
+func LoadMemoriesFromYaml(source io.Reader) ([]Memory, error) {
+	memories := []Memory{}
+	err := yaml.NewDecoder(source).Decode(&memories)
+	return memories, err
+}
 
 func main() {
     p := tea.NewProgram(initialModel())
