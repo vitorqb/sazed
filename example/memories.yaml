@@ -1,0 +1,6 @@
+- command: echo foo
+  description: Write foo to stdin
+- command: firefox
+  description: Opens firefox
+- command: find -iname '*.<ext>'
+  description: Finds all files with common extension

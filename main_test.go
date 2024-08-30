@@ -1,6 +1,8 @@
 package main_test
 
 import (
+	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -8,7 +10,16 @@ import (
 	sazed "github.com/vitorqb/sazed"
 )
 
+func cleanup() {
+	// Cleanup the global QuitErr
+	sazed.QuitErr = nil
+}
+func memory1() sazed.Memory {
+	return sazed.Memory{Command: "cmd1", Description: "Memory 1"}
+}
+
 func Test__ParseCliArgs(t *testing.T) {
+	t.Cleanup(cleanup)
 	t.Run("parse all args", func(t *testing.T) {
 		args := []string{"--memories-file", "/tmp/foo"}
 		parsed, err := sazed.ParseCliArgs(args)
@@ -25,7 +36,8 @@ func Test__ParseCliArgs(t *testing.T) {
 	})
 }
 
-func Test__LoadMemoriesFromFile(t *testing.T) {
+func Test__LoadMemoriesFromYaml(t *testing.T) {
+	t.Cleanup(cleanup)
 	t.Run("loads empty array", func(t *testing.T) {
 		yamlContent := "[]"
 		reader := strings.NewReader(yamlContent)
@@ -44,5 +56,64 @@ func Test__LoadMemoriesFromFile(t *testing.T) {
 			{Command: "foo", Description: "bar"},
 			{Command: "bar", Description: "baz"},
 		}, memories)
+	})
+}
+
+func Test__InitLoadMemories(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("load memories from yaml", func(t *testing.T) {
+		memoriesFile := path.Join(t.TempDir(), "foo")
+		memoriesFileContent := "- {command: foo, description: bar}"
+		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
+		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+	
+		msg := sazed.InitLoadMemories(cliOpts)()
+
+		assert.Equal(t, msg, sazed.LoadedMemories([]sazed.Memory{
+			{Command:     "foo", Description: "bar"},
+		}))
+	})
+	t.Run("report error if loaded from file", func(t *testing.T) {
+		memoriesFile := path.Join(t.TempDir(), "foo")
+		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+
+		msg := sazed.InitLoadMemories(cliOpts)()
+
+		assert.ErrorContains(t, msg.(error), "file")
+	})
+	t.Run("report error if invalid yaml", func(t *testing.T) {
+		memoriesFile := path.Join(t.TempDir(), "foo")
+		memoriesFileContent := "INV{A}LID{YAML"
+		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
+		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+
+		msg := sazed.InitLoadMemories(cliOpts)()
+
+		assert.ErrorContains(t, msg.(error), "unmarshal error")
+	})
+}
+
+func Test__Update(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("handles LoadedMemories", func(t *testing.T) {
+		model := sazed.Model{}
+		msg := sazed.LoadedMemories([]sazed.Memory{
+			{Command: "foo", Description: "bar"},
+		})
+		newModel, cmd := model.Update(msg)
+		assert.Nil(t, cmd)
+		assert.Equal(t, []sazed.Memory(msg), newModel.(sazed.Model).Memories)
+	})
+}
+
+func Test__View(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("renders view with a single memory", func(t *testing.T) {
+		model := sazed.InitialModel(sazed.CLIOptions{})
+		model.Memories = []sazed.Memory{memory1()}
+		rendered := strings.Split(model.View(), "\n")
+		assert.Equal(t, rendered[0], "Please select a command")
+		assert.Contains(t, rendered[1], "cmd1")
+		assert.Contains(t, rendered[1], "Memory 1")
 	})
 }

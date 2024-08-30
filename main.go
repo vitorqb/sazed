@@ -11,52 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Memory represents a memorized CLI command with it's context.
-type Memory struct {
-	Command     string
-	Description string
-}
-
-// Basic Model for https://github.com/charmbracelet/bubbletea
-type model struct {
-	memories []Memory
-	cursor   int
-}
-
-func initialModel() model {
-	return model{
-		memories: []Memory{},
-		cursor:   0,
-	}
-}
-
-// Init implements tea.Model.
-func (m model) Init() tea.Cmd {
-	return nil
-}
-
-// Update implements tea.Model.
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-		}
-	}
-	return m, nil
-}
-
-// View implements tea.Model.
-func (m model) View() string {
-	header := "Please select a command"
-	body := ""
-	for _, memory := range m.memories {
-		body += fmt.Sprintf("[%5.5s] [%s]", memory.Command, memory.Description)
-	}
-	return header + "\n" + body
-}
-
 type CLIOptions struct {
 	MemoriesFile string
 }
@@ -75,16 +29,107 @@ func ParseCliArgs(x []string) (CLIOptions, error) {
 	return cliOpts, nil
 }
 
+// QuitWithErr signals that the program should quit
+type QuitWithErr error
+
+// The error printed when after quitting the program
+var QuitErr QuitWithErr
+
+// Memory represents a memorized CLI command with it's context.
+type Memory struct {
+	Command     string
+	Description string
+}
+
+// Basic Model for https://github.com/charmbracelet/bubbletea
+type Model struct {
+	cliOpts  CLIOptions
+	Memories []Memory
+	cursor   int
+}
+
+// Returns the initial model
+func InitialModel(cliOpts CLIOptions) Model {
+	return Model{
+		cliOpts:  cliOpts,
+		Memories: []Memory{},
+		cursor:   0,
+	}
+}
+
+type LoadedMemories []Memory
+
 func LoadMemoriesFromYaml(source io.Reader) ([]Memory, error) {
 	memories := []Memory{}
 	err := yaml.NewDecoder(source).Decode(&memories)
 	return memories, err
 }
 
+func InitLoadMemories(cliOpts CLIOptions) tea.Cmd {
+	return func() tea.Msg {
+		memoriesFile, err := os.Open(cliOpts.MemoriesFile)
+		if err != nil {
+			return QuitWithErr(fmt.Errorf("failed to load memoriesFile: %w", err))
+		}
+		memories, err := LoadMemoriesFromYaml(memoriesFile)
+		if err != nil {
+			return QuitWithErr(fmt.Errorf("failed to load memories from yaml: %w", err))
+		}
+		return LoadedMemories(memories)
+	}
+}
+
+// Init implements tea.Model.
+func (m Model) Init() tea.Cmd {
+	return InitLoadMemories(m.cliOpts)
+}
+
+// Update implements tea.Model.
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		}
+	case QuitWithErr:
+		// Impure, but the only way I found to quit nicely with an error
+		QuitErr = msg
+		return m, tea.Quit
+	case LoadedMemories:
+		m.Memories = msg
+		return m, nil
+	}
+	return m, nil
+}
+
+// View implements tea.Model.
+func (m Model) View() string {
+	header := "Please select a command"
+	body := ""
+	for _, memory := range m.Memories {
+		body += fmt.Sprintf("[%-35s] %s\n", memory.Command, memory.Description)
+	}
+	return header + "\n" + body
+}
+
+func exitWithErr(msg string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: %s", msg, err)
+	os.Exit(1)
+}
+
 func main() {
-    p := tea.NewProgram(initialModel())
-    if _, err := p.Run(); err != nil {
-        fmt.Printf("exited with error: %v", err)
-        os.Exit(1)
-    }
+	cliOpts, err := ParseCliArgs(os.Args[1:])
+	if err != nil {
+		exitWithErr("failed to parse CLI args", err)
+	}
+	model := InitialModel(cliOpts)
+	p := tea.NewProgram(model)
+	if _, err := p.Run(); err != nil {
+		exitWithErr("exited with error: %v", err)
+	}
+	if QuitErr != nil {
+		exitWithErr("error", QuitErr)
+	}
+
 }
