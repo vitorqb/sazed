@@ -8,26 +8,38 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type CLIOptions struct {
-	MemoriesFile string
+type AppOptions struct {
+	MemoriesFile string `env:"SAZED_MEMORIES_FILE"`
 }
 
-func ParseCliArgs(x []string) (CLIOptions, error) {
-	var cliOpts CLIOptions
+// ParseAppOptions parses the app options from (a) CLI Arguments and (b)
+// a base AppOptions containing values from Env variables.
+func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error) {
+	// parse CLI options
+	var cliOpts AppOptions
 	flagSet := flag.NewFlagSet("sazed", flag.ContinueOnError)
 	flagSet.StringVar(&cliOpts.MemoriesFile, "memories-file", "", "File to read memories from")
-	err := flagSet.Parse(x)
+	err := flagSet.Parse(cliArgs)
 	if err != nil {
 		return cliOpts, err
 	}
-	if (cliOpts.MemoriesFile == "") {
-		return cliOpts, fmt.Errorf("Missing memories file (--memories-file)")
+
+	// join CLI and Env, priority to CLI
+	appOptions := envOptions
+	if (cliOpts.MemoriesFile != "") {
+		appOptions.MemoriesFile = cliOpts.MemoriesFile
 	}
-	return cliOpts, nil
+
+	// sanity checks
+	if (appOptions.MemoriesFile == "") {
+		return appOptions, fmt.Errorf("Missing memories file (--memories-file)")
+	}
+	return appOptions, nil
 }
 
 // QuitWithErr signals that the program should quit
@@ -45,13 +57,13 @@ type Memory struct {
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
 	TextInput textinput.Model
-	cliOpts  CLIOptions
+	cliOpts  AppOptions
 	Memories []Memory
 	cursor   int
 }
 
 // Returns the initial model
-func InitialModel(cliOpts CLIOptions) Model {
+func InitialModel(cliOpts AppOptions) Model {
 	textInput := textinput.New()
 	textInput.Focus()
 
@@ -71,7 +83,7 @@ func LoadMemoriesFromYaml(source io.Reader) ([]Memory, error) {
 	return memories, err
 }
 
-func InitLoadMemories(cliOpts CLIOptions) tea.Cmd {
+func InitLoadMemories(cliOpts AppOptions) tea.Cmd {
 	return func() tea.Msg {
 		memoriesFile, err := os.Open(cliOpts.MemoriesFile)
 		if err != nil {
@@ -127,11 +139,16 @@ func exitWithErr(msg string, err error) {
 }
 
 func main() {
-	cliOpts, err := ParseCliArgs(os.Args[1:])
+	var envOpts AppOptions
+	err := env.Parse(&envOpts)
+	if err != nil {
+		exitWithErr("failed to parse env vars", err)
+	}
+	appOpts, err := ParseAppOptions(os.Args[1:], envOpts)
 	if err != nil {
 		exitWithErr("failed to parse CLI args", err)
 	}
-	model := InitialModel(cliOpts)
+	model := InitialModel(appOpts)
 	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		exitWithErr("exited with error: %v", err)

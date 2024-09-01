@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/caarlos0/env/v11"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	sazed "github.com/vitorqb/sazed"
@@ -19,21 +20,44 @@ func memory1() sazed.Memory {
 	return sazed.Memory{Command: "cmd1", Description: "Memory 1"}
 }
 
-func Test__ParseCliArgs(t *testing.T) {
+func Test__ParseAppOptions(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("parse all args", func(t *testing.T) {
+		// Priority should be given to `args`, not `envOpts`
 		args := []string{"--memories-file", "/tmp/foo"}
-		parsed, err := sazed.ParseCliArgs(args)
+		envOpts := sazed.AppOptions{MemoriesFile: "/tmp/bar"}
+		parsed, err := sazed.ParseAppOptions(args, envOpts)
 		assert.Nil(t, err)
-		expected := sazed.CLIOptions{
+		expected := sazed.AppOptions{
+			MemoriesFile: "/tmp/foo",
+		}
+		assert.Equal(t, expected, parsed)
+	})
+	t.Run("parse from env", func(t *testing.T) {
+		args := []string{}
+		envOpts := sazed.AppOptions{MemoriesFile: "/tmp/foo"}
+		parsed, err := sazed.ParseAppOptions(args, envOpts)
+		assert.Nil(t, err)
+		expected := sazed.AppOptions{
 			MemoriesFile: "/tmp/foo",
 		}
 		assert.Equal(t, expected, parsed)
 	})
 	t.Run("missing memories file", func(t *testing.T) {
 		args := []string{}
-		_, err := sazed.ParseCliArgs(args)
+		_, err := sazed.ParseAppOptions(args, sazed.AppOptions{})
 		assert.ErrorContains(t, err, "--memories-file")
+	})
+}
+
+func Test__AppOptions(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("reads from env", func(t *testing.T) {
+		t.Setenv("SAZED_MEMORIES_FILE", "foo")
+		var appOpts sazed.AppOptions
+		err := env.Parse(&appOpts)
+		assert.Nil(t, err)
+		assert.Equal(t, "foo", appOpts.MemoriesFile)
 	})
 }
 
@@ -66,9 +90,9 @@ func Test__InitLoadMemories(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "- {command: foo, description: bar}"
 		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
-		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
 	
-		msg := sazed.InitLoadMemories(cliOpts)()
+		msg := sazed.InitLoadMemories(appOpts)()
 
 		assert.Equal(t, msg, sazed.LoadedMemories([]sazed.Memory{
 			{Command:     "foo", Description: "bar"},
@@ -76,9 +100,9 @@ func Test__InitLoadMemories(t *testing.T) {
 	})
 	t.Run("report error if loaded from file", func(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
-		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
 
-		msg := sazed.InitLoadMemories(cliOpts)()
+		msg := sazed.InitLoadMemories(appOpts)()
 
 		assert.ErrorContains(t, msg.(error), "file")
 	})
@@ -86,9 +110,9 @@ func Test__InitLoadMemories(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "INV{A}LID{YAML"
 		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
-		cliOpts := sazed.CLIOptions{ MemoriesFile: memoriesFile }
+		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
 
-		msg := sazed.InitLoadMemories(cliOpts)()
+		msg := sazed.InitLoadMemories(appOpts)()
 
 		assert.ErrorContains(t, msg.(error), "unmarshal error")
 	})
@@ -110,7 +134,7 @@ func Test__Update(t *testing.T) {
 func Test__View(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("renders view with a single memory", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.CLIOptions{})
+		model := sazed.InitialModel(sazed.AppOptions{})
 		model.Memories = []sazed.Memory{memory1()}
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "Please select a command", rendered[0])
@@ -118,7 +142,7 @@ func Test__View(t *testing.T) {
 		assert.Contains(t, rendered[2], "Memory 1")
 	})
 	t.Run("renders an input field", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.CLIOptions{})
+		model := sazed.InitialModel(sazed.AppOptions{})
 		model.TextInput, _ = model.TextInput.Update(tea.KeyMsg{
 			Type:  tea.KeyRunes,
 			Runes: []rune{'a'},

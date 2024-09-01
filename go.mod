@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v0.27.1
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v3 v3.0.1
+	github.com/caarlos0/env/v11 v11.2.2
 )
 
 require (
