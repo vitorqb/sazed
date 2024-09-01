@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -43,6 +44,7 @@ type Memory struct {
 
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
+	TextInput textinput.Model
 	cliOpts  CLIOptions
 	Memories []Memory
 	cursor   int
@@ -50,7 +52,11 @@ type Model struct {
 
 // Returns the initial model
 func InitialModel(cliOpts CLIOptions) Model {
+	textInput := textinput.New()
+	textInput.Focus()
+
 	return Model{
+		TextInput: textInput,
 		cliOpts:  cliOpts,
 		Memories: []Memory{},
 		cursor:   0,
@@ -86,6 +92,7 @@ func (m Model) Init() tea.Cmd {
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -100,13 +107,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Memories = msg
 		return m, nil
 	}
-	return m, nil
+	m.TextInput, cmd = m.TextInput.Update(msg)
+	return m, cmd
 }
 
 // View implements tea.Model.
 func (m Model) View() string {
 	header := "Please select a command"
-	body := ""
+	body := m.TextInput.View() + "\n"
 	for _, memory := range m.Memories {
 		body += fmt.Sprintf("[%-35s] %s\n", memory.Command, memory.Description)
 	}

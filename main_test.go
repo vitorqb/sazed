@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	sazed "github.com/vitorqb/sazed"
 )
@@ -112,8 +113,17 @@ func Test__View(t *testing.T) {
 		model := sazed.InitialModel(sazed.CLIOptions{})
 		model.Memories = []sazed.Memory{memory1()}
 		rendered := strings.Split(model.View(), "\n")
-		assert.Equal(t, rendered[0], "Please select a command")
-		assert.Contains(t, rendered[1], "cmd1")
-		assert.Contains(t, rendered[1], "Memory 1")
+		assert.Equal(t, "Please select a command", rendered[0])
+		assert.Contains(t, rendered[2], "cmd1")
+		assert.Contains(t, rendered[2], "Memory 1")
+	})
+	t.Run("renders an input field", func(t *testing.T) {
+		model := sazed.InitialModel(sazed.CLIOptions{})
+		model.TextInput, _ = model.TextInput.Update(tea.KeyMsg{
+			Type:  tea.KeyRunes,
+			Runes: []rune{'a'},
+		})
+		rendered := strings.Split(model.View(), "\n")
+		assert.Equal(t, "> a\x1b[7m \x1b[0m", rendered[1])
 	})
 }
