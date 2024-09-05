@@ -60,6 +60,7 @@ type Model struct {
 	cliOpts  AppOptions
 	Memories []Memory
 	cursor   int
+	fuzzy    IFuzzy
 }
 
 // Returns the initial model
@@ -72,6 +73,7 @@ func InitialModel(cliOpts AppOptions) Model {
 		cliOpts:  cliOpts,
 		Memories: []Memory{},
 		cursor:   0,
+		fuzzy:    NewFuzzy(),
 	}
 }
 
@@ -127,9 +129,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := "Please select a command"
 	body := m.TextInput.View() + "\n"
-	for _, memory := range m.Memories {
+	memories := m.Memories
+
+	if inputStr := m.TextInput.Value(); inputStr != "" {
+		m.fuzzy.SortByMatch(memories, inputStr)
+	}
+
+	for _, memory := range memories {
 		body += fmt.Sprintf("[%-35s] %s\n", memory.Command, memory.Description)
 	}
+	
 	return header + "\n" + body
 }
 

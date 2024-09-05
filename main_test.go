@@ -20,6 +20,14 @@ func memory1() sazed.Memory {
 	return sazed.Memory{Command: "cmd1", Description: "Memory 1"}
 }
 
+func memory2() sazed.Memory {
+	return sazed.Memory{Command: "foo", Description: "Bar"}
+}
+
+func memory3() sazed.Memory {
+	return sazed.Memory{Command: "not foo", Description: "not bar"}
+}
+
 func Test__ParseAppOptions(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("parse all args", func(t *testing.T) {
@@ -149,5 +157,21 @@ func Test__View(t *testing.T) {
 		})
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "> a\x1b[7m \x1b[0m", rendered[1])
+	})
+	t.Run("sort memories by fuzzy search", func(t *testing.T) {
+		model := sazed.InitialModel(sazed.AppOptions{})
+		model.Memories = []sazed.Memory{memory1(), memory2(), memory3()}
+
+		// Simulate user writting foo
+		msg := tea.KeyMsg{
+			Type: tea.KeyRunes,
+			Runes: []rune{'b', 'a', 'r'},
+		}
+		newModel, _ := model.Update(msg)
+
+		// Expect ordered
+		rendered := strings.Split(newModel.View(), "\n")
+		assert.Contains(t, rendered[2], "Bar")
+		assert.Contains(t, rendered[3], "not bar")
 	})
 }
