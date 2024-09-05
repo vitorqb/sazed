@@ -59,7 +59,7 @@ type Model struct {
 	TextInput textinput.Model
 	cliOpts   AppOptions
 	Memories  []Memory
-	cursor    int
+	Cursor    int
 	fuzzy     IFuzzy
 }
 
@@ -72,7 +72,7 @@ func InitialModel(cliOpts AppOptions) Model {
 		TextInput: textInput,
 		cliOpts:   cliOpts,
 		Memories:  []Memory{},
-		cursor:    0,
+		Cursor:    0,
 		fuzzy:     NewFuzzy(),
 	}
 }
@@ -113,6 +113,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		}
+		switch msg.Type {
+		case tea.KeyDown:
+			m = IncreaseCursor(m)
+			return m, nil
+		case tea.KeyUp:
+			m = DecreaseCursor(m)
+			return m, nil
+		}
 	case QuitWithErr:
 		// Impure, but the only way I found to quit nicely with an error
 		QuitErr = msg
@@ -127,19 +135,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m Model) View() string {
-	header := "Please select a command"
-	body := m.TextInput.View() + "\n"
+	body := "Please select a command\n"
+	body += m.TextInput.View() + "\n"
+	body += "----------------------\n"
 	memories := m.Memories
 
 	if inputStr := m.TextInput.Value(); inputStr != "" {
 		m.fuzzy.SortByMatch(memories, inputStr)
 	}
 
-	for _, memory := range memories {
-		body += fmt.Sprintf("[%-35s] %s\n", memory.Command, memory.Description)
+	for i, memory := range memories {
+		cursor := " "
+		if i == m.Cursor {
+			cursor = ">"
+		}
+		body += fmt.Sprintf("%-2s[%-35s] %s\n", cursor, memory.Command, memory.Description)
 	}
 
-	return header + "\n" + body
+	return body
 }
 
 func exitWithErr(msg string, err error) {

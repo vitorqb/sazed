@@ -146,8 +146,8 @@ func Test__View(t *testing.T) {
 		model.Memories = []sazed.Memory{memory1()}
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "Please select a command", rendered[0])
-		assert.Contains(t, rendered[2], "cmd1")
-		assert.Contains(t, rendered[2], "Memory 1")
+		assert.Contains(t, rendered[3], "cmd1")
+		assert.Contains(t, rendered[3], "Memory 1")
 	})
 	t.Run("renders an input field", func(t *testing.T) {
 		model := sazed.InitialModel(sazed.AppOptions{})
@@ -171,7 +171,31 @@ func Test__View(t *testing.T) {
 
 		// Expect ordered
 		rendered := strings.Split(newModel.View(), "\n")
-		assert.Contains(t, rendered[2], "Bar")
-		assert.Contains(t, rendered[3], "not bar")
+		assert.Contains(t, rendered[3], "Bar")
+		assert.Contains(t, rendered[4], "not bar")
+	})
+	t.Run("moves cursor around", func(t *testing.T) {
+		model := sazed.InitialModel(sazed.AppOptions{})
+		model.Memories = []sazed.Memory{memory1(), memory2(), memory3()}
+
+		// Simulate kew down
+		msg := tea.KeyMsg{Type: tea.KeyDown}
+		newModel, newMsg := model.Update(msg)
+		assert.Nil(t, newMsg)
+
+		// Find the cursor at second memory
+		rendered := strings.Split(newModel.View(), "\n")
+		assert.Contains(t, rendered[3], "  [cmd1")
+		assert.Contains(t, rendered[4], "> [foo")
+
+		// Simulate kew up
+		msg = tea.KeyMsg{Type: tea.KeyUp}
+		newModel, newMsg = newModel.Update(msg)
+		assert.Nil(t, newMsg)
+
+		// Find the cursor at the first memory
+		rendered = strings.Split(newModel.View(), "\n")
+		assert.Contains(t, rendered[3], "> [cmd1")
+		assert.Contains(t, rendered[4], "  [foo")
 	})
 }
