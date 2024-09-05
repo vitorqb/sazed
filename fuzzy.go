@@ -9,29 +9,26 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
-// MemoriesFuzzy is a helper for manipulating []Memory
-type MemoriesFuzzy []Memory
+// ScoreByDescription is a helper for calculating score matching by Description
+type ScoreByDescription []Memory
+func (m ScoreByDescription) String(i int) string { return m[i].Description }
+func (m ScoreByDescription) Len() int { return len(m) }
 
-// Implement https://github.com/sahilm/fuzzy
-func (m MemoriesFuzzy) String(i int) string {
-	return m[i].Description
-}
-
-// Implement https://github.com/sahilm/fuzzy
-func (m MemoriesFuzzy) Len() int {
-	return len(m)
-}
+// ScoreByCommand is a helper for calculating score matching by Command
+type ScoreByCommand []Memory
+func (m ScoreByCommand) String(i int) string { return m[i].Command }
+func (m ScoreByCommand) Len() int { return len(m) }
 
 // Implement sort
-type ByScore struct {
+type SortByScore struct {
 	memories []Memory
 	scores   []int
 }
 
 // Implement Sort
-func (s ByScore) Len() int { return len(s.memories) }
-func (s ByScore) Less(i, j int) bool { return s.scores[i] > s.scores[j] }
-func (s ByScore) Swap(i, j int) {
+func (s SortByScore) Len() int { return len(s.memories) }
+func (s SortByScore) Less(i, j int) bool { return s.scores[i] > s.scores[j] }
+func (s SortByScore) Swap(i, j int) {
 	s.memories[i], s.memories[j] = s.memories[j], s.memories[i]
 	s.scores[i], s.scores[j] = s.scores[j], s.scores[i]
 }
@@ -43,21 +40,19 @@ type IFuzzy interface {
 type Fuzzy struct {}
 
 func (Fuzzy) SortByMatch(arr []Memory, input string) {
-	memories := make(MemoriesFuzzy, len(arr))
-	for i, x := range arr {
-		memories[i] = x
-	}
-	results := fuzzy.FindFromNoSort(input, memories)
+	// Matches `input` on both Command and Description
+	matchesByDescription := fuzzy.FindFromNoSort(input, ScoreByDescription(arr))
+	matchesByCommand  := fuzzy.FindFromNoSort(input, ScoreByCommand(arr))
+	matchResults := append(matchesByDescription, matchesByCommand...)
 
 	// Make a `scores` array that maps i -> Score, where i is the index for `arr`
 	scores := make([]int, len(arr))
 	for i := range scores {
 		var found bool
-		for _, result := range results {
+		for _, result := range matchResults {
 			if result.Index == i {
-				scores[i] = result.Score
+				scores[i] += result.Score
 				found = true
-				break
 			}
 		}
 		if !found {
@@ -66,7 +61,7 @@ func (Fuzzy) SortByMatch(arr []Memory, input string) {
 	}
 
 	// Sort the original array by score
-	sort.Sort(ByScore{arr, scores})
+	sort.Sort(SortByScore{arr, scores})
 }
 
 func NewFuzzy() Fuzzy {
