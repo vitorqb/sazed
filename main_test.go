@@ -98,17 +98,17 @@ func Test__InitLoadMemories(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "- {command: foo, description: bar}"
 		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
-		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
-	
+		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
+
 		msg := sazed.InitLoadMemories(appOpts)()
 
 		assert.Equal(t, msg, sazed.LoadedMemories([]sazed.Memory{
-			{Command:     "foo", Description: "bar"},
+			{Command: "foo", Description: "bar"},
 		}))
 	})
 	t.Run("report error if loaded from file", func(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
-		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
+		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
 
 		msg := sazed.InitLoadMemories(appOpts)()
 
@@ -118,7 +118,7 @@ func Test__InitLoadMemories(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "INV{A}LID{YAML"
 		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
-		appOpts := sazed.AppOptions{ MemoriesFile: memoriesFile }
+		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
 
 		msg := sazed.InitLoadMemories(appOpts)()
 
@@ -164,7 +164,7 @@ func Test__View(t *testing.T) {
 
 		// Simulate user writting foo
 		msg := tea.KeyMsg{
-			Type: tea.KeyRunes,
+			Type:  tea.KeyRunes,
 			Runes: []rune{'b', 'a', 'r'},
 		}
 		newModel, _ := model.Update(msg)

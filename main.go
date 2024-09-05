@@ -31,12 +31,12 @@ func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error
 
 	// join CLI and Env, priority to CLI
 	appOptions := envOptions
-	if (cliOpts.MemoriesFile != "") {
+	if cliOpts.MemoriesFile != "" {
 		appOptions.MemoriesFile = cliOpts.MemoriesFile
 	}
 
 	// sanity checks
-	if (appOptions.MemoriesFile == "") {
+	if appOptions.MemoriesFile == "" {
 		return appOptions, fmt.Errorf("Missing memories file (--memories-file)")
 	}
 	return appOptions, nil
@@ -57,10 +57,10 @@ type Memory struct {
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
 	TextInput textinput.Model
-	cliOpts  AppOptions
-	Memories []Memory
-	cursor   int
-	fuzzy    IFuzzy
+	cliOpts   AppOptions
+	Memories  []Memory
+	cursor    int
+	fuzzy     IFuzzy
 }
 
 // Returns the initial model
@@ -70,10 +70,10 @@ func InitialModel(cliOpts AppOptions) Model {
 
 	return Model{
 		TextInput: textInput,
-		cliOpts:  cliOpts,
-		Memories: []Memory{},
-		cursor:   0,
-		fuzzy:    NewFuzzy(),
+		cliOpts:   cliOpts,
+		Memories:  []Memory{},
+		cursor:    0,
+		fuzzy:     NewFuzzy(),
 	}
 }
 
@@ -138,7 +138,7 @@ func (m Model) View() string {
 	for _, memory := range memories {
 		body += fmt.Sprintf("[%-35s] %s\n", memory.Command, memory.Description)
 	}
-	
+
 	return header + "\n" + body
 }
 

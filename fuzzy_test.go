@@ -1,9 +1,9 @@
 package main_test
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
 	sazed "github.com/vitorqb/sazed"
+	"testing"
 )
 
 func Test__Fuzzy__SortByMatch(t *testing.T) {
