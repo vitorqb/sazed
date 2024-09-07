@@ -42,11 +42,17 @@ func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error
 	return appOptions, nil
 }
 
+// QuitWithOutput signals that the program should quit and print something to stdout.
+type QuitWithOutput string
+
 // QuitWithErr signals that the program should quit
 type QuitWithErr error
 
 // The error printed when after quitting the program
 var QuitErr QuitWithErr
+
+// An output to print when quitting
+var QuitOutput QuitWithOutput
 
 // Memory represents a memorized CLI command with it's context.
 type Memory struct {
@@ -120,10 +126,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyUp:
 			m = DecreaseCursor(m)
 			return m, nil
+		case tea.KeyEnter:
+			selectedMem := m.Memories[m.Cursor]
+			msg := QuitWithOutput(selectedMem.Command)
+			return m, func() tea.Msg { return msg }
 		}
 	case QuitWithErr:
 		// Impure, but the only way I found to quit nicely with an error
 		QuitErr = msg
+		return m, tea.Quit
+	case QuitWithOutput:
+		// Impure, but the only way I found to quit nicely with an output
+		QuitOutput = msg
 		return m, tea.Quit
 	case LoadedMemories:
 		m.Memories = msg
@@ -178,5 +192,7 @@ func main() {
 	if QuitErr != nil {
 		exitWithErr("error", QuitErr)
 	}
-
+	if QuitOutput != "" {
+		fmt.Print(QuitOutput)
+	}
 }

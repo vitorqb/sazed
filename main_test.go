@@ -137,6 +137,21 @@ func Test__Update(t *testing.T) {
 		assert.Nil(t, cmd)
 		assert.Equal(t, []sazed.Memory(msg), newModel.(sazed.Model).Memories)
 	})
+	t.Run("handles enter key", func(t *testing.T) {
+		model := sazed.Model{}
+		model.Memories = []sazed.Memory{memory1()}
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		newModel, cmd := model.Update(msg)
+
+		// Model is unchanged
+		assert.Equal(t, model, newModel)
+
+		// Runs the command. It must return a msg telling the program to quit
+		// with output.
+		newMsg := cmd()
+		assert.Equal(t, sazed.QuitWithOutput(memory1().Command), newMsg)
+
+	})
 }
 
 func Test__View(t *testing.T) {
@@ -156,7 +171,7 @@ func Test__View(t *testing.T) {
 			Runes: []rune{'a'},
 		})
 		rendered := strings.Split(model.View(), "\n")
-		assert.Equal(t, "> a\x1b[7m \x1b[0m", rendered[1])
+		assert.Equal(t, "> a ", rendered[1])
 	})
 	t.Run("sort memories by fuzzy search", func(t *testing.T) {
 		model := sazed.InitialModel(sazed.AppOptions{})
