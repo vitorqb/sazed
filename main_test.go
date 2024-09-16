@@ -28,16 +28,49 @@ func memory3() sazed.Memory {
 	return sazed.Memory{Command: "not foo", Description: "not bar"}
 }
 
+func newTestModel() sazed.Model {
+	return sazed.InitialModel(sazed.AppOptions{
+		CommandPrintLength: sazed.DefaultCommandPrintLength,
+	})
+}
+
+func Test__NewAppOptionsFromEnv(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("instantiates from env vars", func(t *testing.T) {
+		t.Setenv("SAZED_MEMORIES_FILE", "/foo")
+		t.Setenv("SAZED_COMMAND_PRINT_LENGTH", "999")
+
+		envOpts, err := sazed.NewAppOptionsFromEnv()
+
+		assert.Nil(t, err)
+		assert.Equal(t, sazed.AppOptions{
+			MemoriesFile:       "/foo",
+			CommandPrintLength: 999,
+		}, envOpts)
+	})
+	t.Run("fails because wrong format of CommandPrintLength", func(t *testing.T) {
+		t.Setenv("SAZED_COMMAND_PRINT_LENGTH", "aaa")
+
+		_, err := sazed.NewAppOptionsFromEnv()
+
+		assert.ErrorContains(t, err, "CommandPrintLength")
+	})
+}
+
 func Test__ParseAppOptions(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("parse all args", func(t *testing.T) {
 		// Priority should be given to `args`, not `envOpts`
-		args := []string{"--memories-file", "/tmp/foo"}
+		args := []string{
+			"--memories-file", "/tmp/foo",
+			"--command-print-length", "45",
+		}
 		envOpts := sazed.AppOptions{MemoriesFile: "/tmp/bar"}
 		parsed, err := sazed.ParseAppOptions(args, envOpts)
 		assert.Nil(t, err)
 		expected := sazed.AppOptions{
-			MemoriesFile: "/tmp/foo",
+			MemoriesFile:       "/tmp/foo",
+			CommandPrintLength: 45,
 		}
 		assert.Equal(t, expected, parsed)
 	})
@@ -47,7 +80,8 @@ func Test__ParseAppOptions(t *testing.T) {
 		parsed, err := sazed.ParseAppOptions(args, envOpts)
 		assert.Nil(t, err)
 		expected := sazed.AppOptions{
-			MemoriesFile: "/tmp/foo",
+			MemoriesFile:       "/tmp/foo",
+			CommandPrintLength: sazed.DefaultCommandPrintLength,
 		}
 		assert.Equal(t, expected, parsed)
 	})
@@ -157,7 +191,7 @@ func Test__Update(t *testing.T) {
 func Test__View(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("renders view with a single memory", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.AppOptions{})
+		model := newTestModel()
 		model.Memories = []sazed.Memory{memory1()}
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "Please select a command", rendered[0])
@@ -165,7 +199,7 @@ func Test__View(t *testing.T) {
 		assert.Contains(t, rendered[3], "Memory 1")
 	})
 	t.Run("renders an input field", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.AppOptions{})
+		model := newTestModel()
 		model.TextInput, _ = model.TextInput.Update(tea.KeyMsg{
 			Type:  tea.KeyRunes,
 			Runes: []rune{'a'},
@@ -173,8 +207,21 @@ func Test__View(t *testing.T) {
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "> a ", rendered[1])
 	})
+	t.Run("commands with long width are trimmed", func(t *testing.T) {
+		memory := memory1()
+		memory.Command = strings.Repeat("x", 100)
+		model := newTestModel()
+		model.Memories = []sazed.Memory{memory}
+		cmdPrintLen := 30
+		model.AppOpts.CommandPrintLength = cmdPrintLen
+
+		rendered := strings.Split(model.View(), "\n")
+
+		expected := "[" + memory.Command[0:30] + "]"
+		assert.Contains(t, rendered[3], expected)
+	})
 	t.Run("sort memories by fuzzy search", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.AppOptions{})
+		model := newTestModel()
 		model.Memories = []sazed.Memory{memory1(), memory2(), memory3()}
 
 		// Simulate user writting foo
@@ -190,7 +237,7 @@ func Test__View(t *testing.T) {
 		assert.Contains(t, rendered[4], "not bar")
 	})
 	t.Run("moves cursor around", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.AppOptions{})
+		model := newTestModel()
 		model.Memories = []sazed.Memory{memory1(), memory2(), memory3()}
 
 		// Simulate kew down
@@ -201,7 +248,7 @@ func Test__View(t *testing.T) {
 		// Find the cursor at second memory
 		rendered := strings.Split(newModel.View(), "\n")
 		assert.Contains(t, rendered[3], "  [cmd1")
-		assert.Contains(t, rendered[4], "> [foo")
+		assert.Contains(t, rendered[4], ">>[foo")
 
 		// Simulate kew up
 		msg = tea.KeyMsg{Type: tea.KeyUp}
@@ -210,7 +257,7 @@ func Test__View(t *testing.T) {
 
 		// Find the cursor at the first memory
 		rendered = strings.Split(newModel.View(), "\n")
-		assert.Contains(t, rendered[3], "> [cmd1")
+		assert.Contains(t, rendered[3], ">>[cmd1")
 		assert.Contains(t, rendered[4], "  [foo")
 	})
 }

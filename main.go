@@ -13,8 +13,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const DefaultCommandPrintLength = 75
+
 type AppOptions struct {
-	MemoriesFile string `env:"SAZED_MEMORIES_FILE"`
+	MemoriesFile       string `env:"SAZED_MEMORIES_FILE"`
+	CommandPrintLength int    `env:"SAZED_COMMAND_PRINT_LENGTH"`
+}
+
+// Instantiates AppOptions from environmental variables
+func NewAppOptionsFromEnv() (AppOptions, error) {
+	var appOpts AppOptions
+	err := env.Parse(&appOpts)
+	if err != nil {
+		return appOpts, fmt.Errorf("failed to parse from env: %w", err)
+	}
+	return appOpts, nil
 }
 
 // ParseAppOptions parses the app options from (a) CLI Arguments and (b)
@@ -24,6 +37,7 @@ func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error
 	var cliOpts AppOptions
 	flagSet := flag.NewFlagSet("sazed", flag.ContinueOnError)
 	flagSet.StringVar(&cliOpts.MemoriesFile, "memories-file", "", "File to read memories from")
+	flagSet.IntVar(&cliOpts.CommandPrintLength, "command-print-length", 0, "How many characters to print for Commands")
 	err := flagSet.Parse(cliArgs)
 	if err != nil {
 		return cliOpts, err
@@ -33,6 +47,14 @@ func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error
 	appOptions := envOptions
 	if cliOpts.MemoriesFile != "" {
 		appOptions.MemoriesFile = cliOpts.MemoriesFile
+	}
+	if cliOpts.CommandPrintLength != 0 {
+		appOptions.CommandPrintLength = cliOpts.CommandPrintLength
+	}
+
+	// defaults
+	if appOptions.CommandPrintLength == 0 {
+		appOptions.CommandPrintLength = DefaultCommandPrintLength
 	}
 
 	// sanity checks
@@ -63,7 +85,7 @@ type Memory struct {
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
 	TextInput textinput.Model
-	cliOpts   AppOptions
+	AppOpts   AppOptions
 	Memories  []Memory
 	Cursor    int
 	fuzzy     IFuzzy
@@ -76,7 +98,7 @@ func InitialModel(cliOpts AppOptions) Model {
 
 	return Model{
 		TextInput: textInput,
-		cliOpts:   cliOpts,
+		AppOpts:   cliOpts,
 		Memories:  []Memory{},
 		Cursor:    0,
 		fuzzy:     NewFuzzy(),
@@ -107,7 +129,7 @@ func InitLoadMemories(cliOpts AppOptions) tea.Cmd {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return InitLoadMemories(m.cliOpts)
+	return InitLoadMemories(m.AppOpts)
 }
 
 // Update implements tea.Model.
@@ -161,9 +183,11 @@ func (m Model) View() string {
 	for i, memory := range memories {
 		cursor := " "
 		if i == m.Cursor {
-			cursor = ">"
+			cursor = ">>"
 		}
-		body += fmt.Sprintf("%-2s[%-35s] %s\n", cursor, memory.Command, memory.Description)
+		printLength := fmt.Sprintf("%d", m.AppOpts.CommandPrintLength)
+		format := "%-2s[%-" + printLength + "." + printLength + "s] %s\n"
+		body += fmt.Sprintf(format, cursor, memory.Command, memory.Description)
 	}
 
 	return body
@@ -175,8 +199,7 @@ func exitWithErr(msg string, err error) {
 }
 
 func main() {
-	var envOpts AppOptions
-	err := env.Parse(&envOpts)
+	envOpts, err := NewAppOptionsFromEnv()
 	if err != nil {
 		exitWithErr("failed to parse env vars", err)
 	}

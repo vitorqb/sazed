@@ -1,6 +1,8 @@
-- command: echo foo
-  description: Write foo to stdin
-- command: firefox
-  description: Opens firefox
+- command: 'docker ps -a -q | xargs -I{} docker stop {} && docker ps -a -q | xargs -I{} docker rm {}'
+  description: Stop all running docker containers
+- command: "git config --local user.email 'myemail@gmail.com' && git config --local user.name 'Some User'"
+  description: Configures git to Some User
 - command: find -iname '*.<ext>'
   description: Finds all files with common extension
+- command: sudo systemctl restart iwd
+  description: Restarts iwd
