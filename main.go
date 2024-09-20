@@ -186,8 +186,13 @@ func (m Model) View() string {
 			cursor = ">>"
 		}
 		printLength := fmt.Sprintf("%d", m.AppOpts.CommandPrintLength)
-		format := "%-2s[%-" + printLength + "." + printLength + "s] %s\n"
-		body += fmt.Sprintf(format, cursor, memory.Command, memory.Description)
+
+		// Prints command on first line
+		format := "%-2s %-" + printLength + "." + printLength + "s\n"
+		body += fmt.Sprintf(format, cursor, memory.Command)
+
+		// Prints description on second line
+		body += fmt.Sprintf("      |%s\n", memory.Description)
 	}
 
 	return body

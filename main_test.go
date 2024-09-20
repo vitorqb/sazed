@@ -196,7 +196,7 @@ func Test__View(t *testing.T) {
 		rendered := strings.Split(model.View(), "\n")
 		assert.Equal(t, "Please select a command", rendered[0])
 		assert.Contains(t, rendered[3], "cmd1")
-		assert.Contains(t, rendered[3], "Memory 1")
+		assert.Contains(t, rendered[4], "Memory 1")
 	})
 	t.Run("renders an input field", func(t *testing.T) {
 		model := newTestModel()
@@ -217,8 +217,9 @@ func Test__View(t *testing.T) {
 
 		rendered := strings.Split(model.View(), "\n")
 
-		expected := "[" + memory.Command[0:30] + "]"
+		expected := memory.Command[0:30]
 		assert.Contains(t, rendered[3], expected)
+		assert.NotContains(t, rendered[3], memory.Command)
 	})
 	t.Run("sort memories by fuzzy search", func(t *testing.T) {
 		model := newTestModel()
@@ -233,8 +234,8 @@ func Test__View(t *testing.T) {
 
 		// Expect ordered
 		rendered := strings.Split(newModel.View(), "\n")
-		assert.Contains(t, rendered[3], "Bar")
-		assert.Contains(t, rendered[4], "not bar")
+		assert.Contains(t, rendered[4], "Bar")
+		assert.Contains(t, rendered[6], "not bar")
 	})
 	t.Run("moves cursor around", func(t *testing.T) {
 		model := newTestModel()
@@ -247,8 +248,8 @@ func Test__View(t *testing.T) {
 
 		// Find the cursor at second memory
 		rendered := strings.Split(newModel.View(), "\n")
-		assert.Contains(t, rendered[3], "  [cmd1")
-		assert.Contains(t, rendered[4], ">>[foo")
+		assert.Contains(t, rendered[3], "   cmd1")
+		assert.Contains(t, rendered[5], ">> foo")
 
 		// Simulate kew up
 		msg = tea.KeyMsg{Type: tea.KeyUp}
@@ -257,7 +258,7 @@ func Test__View(t *testing.T) {
 
 		// Find the cursor at the first memory
 		rendered = strings.Split(newModel.View(), "\n")
-		assert.Contains(t, rendered[3], ">>[cmd1")
-		assert.Contains(t, rendered[4], "  [foo")
+		assert.Contains(t, rendered[3], ">> cmd1")
+		assert.Contains(t, rendered[5], "   foo")
 	})
 }
