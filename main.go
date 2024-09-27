@@ -174,13 +174,11 @@ func (m Model) View() string {
 	body := "Please select a command\n"
 	body += m.TextInput.View() + "\n"
 	body += "----------------------\n"
-	memories := m.Memories
 
-	if inputStr := m.TextInput.Value(); inputStr != "" {
-		m.fuzzy.SortByMatch(memories, inputStr)
-	}
+	inputStr := m.TextInput.Value()
+	matches := m.fuzzy.GetMatches(m.Memories, inputStr)
 
-	for i, memory := range memories {
+	for i, match := range matches {
 		cursor := " "
 		if i == m.Cursor {
 			cursor = ">>"
@@ -189,10 +187,10 @@ func (m Model) View() string {
 
 		// Prints command on first line
 		format := "%-2s %-" + printLength + "." + printLength + "s\n"
-		body += fmt.Sprintf(format, cursor, memory.Command)
+		body += fmt.Sprintf(format, cursor, match.Memory.Command)
 
 		// Prints description on second line
-		body += fmt.Sprintf("      |%s\n", memory.Description)
+		body += fmt.Sprintf("      |%s\n", match.Memory.Description)
 	}
 
 	return body

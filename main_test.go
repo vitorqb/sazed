@@ -236,6 +236,9 @@ func Test__View(t *testing.T) {
 		rendered := strings.Split(newModel.View(), "\n")
 		assert.Contains(t, rendered[4], "Bar")
 		assert.Contains(t, rendered[6], "not bar")
+
+		// First command should not be there
+		assert.Len(t, rendered, 8)
 	})
 	t.Run("moves cursor around", func(t *testing.T) {
 		model := newTestModel()

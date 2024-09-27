@@ -3,11 +3,18 @@
 package main
 
 import (
-	"math"
 	"sort"
 
 	"github.com/sahilm/fuzzy"
 )
+
+// Match represents a memory that matches a string input
+type Match struct {
+	Memory                    Memory
+	Score                     int
+	CommandMatchedIndexes     []int
+	DescriptionMatchedIndexes []int
+}
 
 // ScoreByDescription is a helper for calculating score matching by Description
 type ScoreByDescription []Memory
@@ -21,49 +28,62 @@ type ScoreByCommand []Memory
 func (m ScoreByCommand) String(i int) string { return m[i].Command }
 func (m ScoreByCommand) Len() int            { return len(m) }
 
-// Implement sort
-type SortByScore struct {
-	memories []Memory
-	scores   []int
-}
-
-// Implement Sort
-func (s SortByScore) Len() int           { return len(s.memories) }
-func (s SortByScore) Less(i, j int) bool { return s.scores[i] > s.scores[j] }
-func (s SortByScore) Swap(i, j int) {
-	s.memories[i], s.memories[j] = s.memories[j], s.memories[i]
-	s.scores[i], s.scores[j] = s.scores[j], s.scores[i]
-}
-
+// IFuzzy is an interface for fuzzy matching memories with an input string
 type IFuzzy interface {
-	SortByMatch(memories []Memory, input string)
+	GetMatches(memories []Memory, input string) []Match
 }
 
 type Fuzzy struct{}
 
-func (Fuzzy) SortByMatch(arr []Memory, input string) {
-	// Matches `input` on both Command and Description
-	matchesByDescription := fuzzy.FindFromNoSort(input, ScoreByDescription(arr))
-	matchesByCommand := fuzzy.FindFromNoSort(input, ScoreByCommand(arr))
-	matchResults := append(matchesByDescription, matchesByCommand...)
-
-	// Make a `scores` array that maps i -> Score, where i is the index for `arr`
-	scores := make([]int, len(arr))
-	for i := range scores {
-		var found bool
-		for _, result := range matchResults {
-			if result.Index == i {
-				scores[i] += result.Score
-				found = true
-			}
+// GetMatches returns a list of fuzzy matches for
+func (Fuzzy) GetMatches(memories []Memory, input string) []Match {
+	// Handle special case of empty input
+	if input == "" {
+		var matches []Match
+		for _, memory := range memories {
+			matches = append(matches, Match{Memory: memory})
 		}
-		if !found {
-			scores[i] = math.MinInt
+		return matches
+	}
+
+	// Matches `input` on both Command and Description
+	matchesByDescription := fuzzy.FindFromNoSort(input, ScoreByDescription(memories))
+	matchesByCommand := fuzzy.FindFromNoSort(input, ScoreByCommand(memories))
+
+	// matchesMap is a map of index -> Match
+	matchesMap := make(map[int]Match)
+	for _, result := range matchesByDescription {
+		matchesMap[result.Index] = Match{
+			Memory:                    memories[result.Index],
+			Score:                     result.Score,
+			DescriptionMatchedIndexes: result.MatchedIndexes,
+		}
+	}
+	for _, result := range matchesByCommand {
+		if match, ok := matchesMap[result.Index]; ok {
+			match.Score += result.Score
+			match.CommandMatchedIndexes = result.MatchedIndexes
+		} else {
+			matchesMap[result.Index] = Match{
+				Memory:                memories[result.Index],
+				Score:                 result.Score,
+				CommandMatchedIndexes: result.MatchedIndexes,
+			}
 		}
 	}
 
-	// Sort the original array by score
-	sort.Sort(SortByScore{arr, scores})
+	// Convert the map to a list
+	matches := make([]Match, 0, len(matchesMap))
+	for _, match := range matchesMap {
+		matches = append(matches, match)
+	}
+
+	// Sort the list by score
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Score > matches[j].Score
+	})
+
+	return matches
 }
 
 func NewFuzzy() Fuzzy {

@@ -6,48 +6,74 @@ import (
 	"testing"
 )
 
-func Test__Fuzzy__SortByMatch(t *testing.T) {
-	t.Run("null value", func(t *testing.T) {
-		var memories []sazed.Memory
-		sazed.NewFuzzy().SortByMatch(memories, "foo")
-		var emptyMemories []sazed.Memory
-		assert.Equal(t, emptyMemories, memories)
-	})
-	t.Run("empty", func(t *testing.T) {
+func TestGetMatches(t *testing.T) {
+	t.Run("empty list", func(t *testing.T) {
 		memories := []sazed.Memory{}
-		sazed.NewFuzzy().SortByMatch(memories, "foo")
-		assert.Equal(t, []sazed.Memory{}, memories)
+		matches := sazed.NewFuzzy().GetMatches(memories, "foo")
+		assert.Equal(t, []sazed.Match{}, matches)
 	})
-	t.Run("sorts by match in description", func(t *testing.T) {
+	t.Run("two in one out", func(t *testing.T) {
 		memories := []sazed.Memory{
-			{Description: "foo"},
-			{Description: "bar"},
-			{Description: "not foo"},
-			{Description: "very long description with foo"},
+			{Command: "foo"},
+			{Command: "bar"},
 		}
-		expected := []sazed.Memory{
-			memories[0],
-			memories[2],
-			memories[3],
-			memories[1],
-		}
-		sazed.NewFuzzy().SortByMatch(memories, "foo")
-		assert.Equal(t, expected, memories)
+		matches := sazed.NewFuzzy().GetMatches(memories, "foo")
+		assert.Equal(t, []sazed.Match{
+			{
+				Memory:                memories[0],
+				Score:                 30,
+				CommandMatchedIndexes: []int{0, 1, 2},
+			},
+		}, matches)
 	})
-	t.Run("sorts by match in command", func(t *testing.T) {
+	t.Run("three in two out", func(t *testing.T) {
 		memories := []sazed.Memory{
 			{Command: "foo"},
 			{Command: "bar"},
 			{Command: "not foo"},
-			{Command: "very long description with foo"},
 		}
-		expected := []sazed.Memory{
-			memories[0],
-			memories[2],
-			memories[3],
-			memories[1],
+		matches := sazed.NewFuzzy().GetMatches(memories, "foo")
+		assert.Equal(t, []sazed.Match{
+			{
+				Memory:                memories[0],
+				Score:                 30,
+				CommandMatchedIndexes: []int{0, 1, 2},
+			},
+			{
+				Memory:                memories[2],
+				Score:                 21,
+				CommandMatchedIndexes: []int{4, 5, 6},
+			},
+		}, matches)
+	})
+	t.Run("match by command and description", func(t *testing.T) {
+		memories := []sazed.Memory{
+			{Command: "foo", Description: "bar"},
+			{Command: "bar", Description: "foo2"},
 		}
-		sazed.NewFuzzy().SortByMatch(memories, "foo")
-		assert.Equal(t, expected, memories)
+		matches := sazed.NewFuzzy().GetMatches(memories, "foo")
+		assert.Equal(t, []sazed.Match{
+			{
+				Memory:                memories[0],
+				Score:                 30,
+				CommandMatchedIndexes: []int{0, 1, 2},
+			},
+			{
+				Memory:                    memories[1],
+				Score:                     29,
+				DescriptionMatchedIndexes: []int{0, 1, 2},
+			},
+		}, matches)
+	})
+	t.Run("if input str is empty all memories are returned", func(t *testing.T) {
+		memories := []sazed.Memory{
+			{Command: "foo", Description: "bar"},
+			{Command: "bar", Description: "foo2"},
+		}
+		matches := sazed.NewFuzzy().GetMatches(memories, "")
+		assert.Equal(t, []sazed.Match{
+			{Memory: memories[0]},
+			{Memory: memories[1]},
+		}, matches)
 	})
 }
