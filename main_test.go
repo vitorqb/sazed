@@ -176,18 +176,16 @@ func Test__InitLoadMemories(t *testing.T) {
 func Test__Update(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("handles LoadedMemories", func(t *testing.T) {
-		var model tea.Model
-
-		model = newTestModel()
+		model := newTestModel()
 		msg := sazed.LoadedMemories([]sazed.Memory{
 			{Command: "foo", Description: "bar"},
 		})
-		model = update(model, msg)
-		assert.Equal(t, []sazed.Memory(msg), model.(sazed.Model).Memories)
+		model = update(model, msg).(sazed.Model)
+		assert.Equal(t, []sazed.Memory(msg), model.Memories)
 	})
 	t.Run("handles enter key", func(t *testing.T) {
 		model := sazed.Model{}
-		model.Memories = []sazed.Memory{memory1()}
+		model.Matches = []sazed.Match{{Memory: memory1()}}
 		msg := tea.KeyMsg{Type: tea.KeyEnter}
 		newModel, cmd := model.Update(msg)
 
@@ -199,6 +197,23 @@ func Test__Update(t *testing.T) {
 		newMsg := cmd()
 		assert.Equal(t, sazed.QuitWithOutput(memory1().Command), newMsg)
 
+	})
+	t.Run("selects memory from user input", func(t *testing.T) {
+		// Load memories
+		memories := []sazed.Memory{memory1(), memory2()}
+		m := update(newTestModel(), sazed.LoadedMemories(memories))
+
+		// User inputs Bar and selects second memory
+		m = update(m, tea.KeyMsg{
+			Type:  tea.KeyRunes,
+			Runes: []rune{'b', 'a', 'r'},
+		})
+
+		// User hits enter
+		m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+		// QuitWithOutput is sent
+		assert.Equal(t, sazed.QuitWithOutput(memory2().Command), cmd())
 	})
 }
 

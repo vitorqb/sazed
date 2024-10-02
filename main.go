@@ -183,8 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = DecreaseCursor(m)
 			return m, nil
 		case tea.KeyEnter:
-			selectedMem := m.Memories[m.Cursor]
-			msg := QuitWithOutput(selectedMem.Command)
+			msg := QuitWithOutput(m.Matches[m.Cursor].Memory.Command)
 			return m, func() tea.Msg { return msg }
 		}
 	case QuitWithErr:
