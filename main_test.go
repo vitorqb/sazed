@@ -34,6 +34,19 @@ func newTestModel() sazed.Model {
 	})
 }
 
+func update(m tea.Model, msg tea.Msg) tea.Model {
+	return batchUpdate(m, func() tea.Msg { return msg })
+}
+
+func batchUpdate(m tea.Model, cmd tea.Cmd) tea.Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	m2, cmd := m.Update(msg)
+	return batchUpdate(m2, cmd)
+}
+
 func Test__NewAppOptionsFromEnv(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("instantiates from env vars", func(t *testing.T) {
@@ -163,13 +176,14 @@ func Test__InitLoadMemories(t *testing.T) {
 func Test__Update(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("handles LoadedMemories", func(t *testing.T) {
-		model := sazed.Model{}
+		var model tea.Model
+
+		model = newTestModel()
 		msg := sazed.LoadedMemories([]sazed.Memory{
 			{Command: "foo", Description: "bar"},
 		})
-		newModel, cmd := model.Update(msg)
-		assert.Nil(t, cmd)
-		assert.Equal(t, []sazed.Memory(msg), newModel.(sazed.Model).Memories)
+		model = update(model, msg)
+		assert.Equal(t, []sazed.Memory(msg), model.(sazed.Model).Memories)
 	})
 	t.Run("handles enter key", func(t *testing.T) {
 		model := sazed.Model{}
@@ -191,27 +205,30 @@ func Test__Update(t *testing.T) {
 func Test__View(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("renders view with a single memory", func(t *testing.T) {
-		model := newTestModel()
-		model.Memories = []sazed.Memory{memory1()}
+		msg := sazed.LoadedMemories([]sazed.Memory{memory1()})
+		model := update(newTestModel(), msg)
+
 		rendered := strings.Split(model.View(), "\n")
+
 		assert.Equal(t, "Please select a command", rendered[0])
 		assert.Contains(t, rendered[3], "cmd1")
 		assert.Contains(t, rendered[4], "Memory 1")
 	})
 	t.Run("renders an input field", func(t *testing.T) {
-		model := newTestModel()
-		model.TextInput, _ = model.TextInput.Update(tea.KeyMsg{
+		model := update(newTestModel(), tea.KeyMsg{
 			Type:  tea.KeyRunes,
 			Runes: []rune{'a'},
 		})
+
 		rendered := strings.Split(model.View(), "\n")
+
 		assert.Equal(t, "> a ", rendered[1])
 	})
 	t.Run("commands with long width are trimmed", func(t *testing.T) {
+		model := newTestModel()
 		memory := memory1()
 		memory.Command = strings.Repeat("x", 100)
-		model := newTestModel()
-		model.Memories = []sazed.Memory{memory}
+		model.Matches = []sazed.Match{{Memory: memory}}
 		cmdPrintLen := 30
 		model.AppOpts.CommandPrintLength = cmdPrintLen
 
@@ -230,10 +247,10 @@ func Test__View(t *testing.T) {
 			Type:  tea.KeyRunes,
 			Runes: []rune{'b', 'a', 'r'},
 		}
-		newModel, _ := model.Update(msg)
+		model = update(model, msg).(sazed.Model)
 
 		// Expect ordered
-		rendered := strings.Split(newModel.View(), "\n")
+		rendered := strings.Split(model.View(), "\n")
 		assert.Contains(t, rendered[4], "Bar")
 		assert.Contains(t, rendered[6], "not bar")
 
@@ -241,27 +258,87 @@ func Test__View(t *testing.T) {
 		assert.Len(t, rendered, 8)
 	})
 	t.Run("moves cursor around", func(t *testing.T) {
-		model := newTestModel()
-		model.Memories = []sazed.Memory{memory1(), memory2(), memory3()}
+		// Load memories
+		memories := sazed.LoadedMemories([]sazed.Memory{memory1(), memory2(), memory3()})
+		model := update(newTestModel(), memories)
 
 		// Simulate kew down
 		msg := tea.KeyMsg{Type: tea.KeyDown}
-		newModel, newMsg := model.Update(msg)
-		assert.Nil(t, newMsg)
+		model = update(model, msg)
 
 		// Find the cursor at second memory
-		rendered := strings.Split(newModel.View(), "\n")
+		rendered := strings.Split(model.View(), "\n")
 		assert.Contains(t, rendered[3], "   cmd1")
 		assert.Contains(t, rendered[5], ">> foo")
 
 		// Simulate kew up
-		msg = tea.KeyMsg{Type: tea.KeyUp}
-		newModel, newMsg = newModel.Update(msg)
-		assert.Nil(t, newMsg)
+		model = update(model, tea.KeyMsg{Type: tea.KeyUp})
 
 		// Find the cursor at the first memory
-		rendered = strings.Split(newModel.View(), "\n")
+		rendered = strings.Split(model.View(), "\n")
 		assert.Contains(t, rendered[3], ">> cmd1")
 		assert.Contains(t, rendered[5], "   foo")
+	})
+}
+
+type FakeFuzzy struct {
+	mockResult []sazed.Match
+}
+
+func (f *FakeFuzzy) GetMatches(memories []sazed.Memory, input string) []sazed.Match {
+	return f.mockResult
+}
+
+func Test__UpdateMatches(t *testing.T) {
+	t.Run("no memories no input", func(t *testing.T) {
+		fuzzy := &FakeFuzzy{[]sazed.Match{}}
+		memories := []sazed.Memory{}
+		input := ""
+		updateMatches := sazed.UpdateMatches(fuzzy)
+
+		result := updateMatches(memories, input, false)()
+
+		assert.Equal(t, sazed.SetMatched([]sazed.Match{}), result)
+	})
+
+	t.Run("return nil if input unchanged input", func(t *testing.T) {
+		matches := []sazed.Match{{Score: 20}}
+		fuzzy := &FakeFuzzy{matches}
+		memories := []sazed.Memory{}
+		input := "foo"
+		updateMatches := sazed.UpdateMatches(fuzzy)
+
+		resultOne := updateMatches(memories, input, false)()
+		assert.Equal(t, sazed.SetMatched(matches), resultOne)
+
+		resultTwo := updateMatches(memories, input, false)()
+		assert.Equal(t, nil, resultTwo)
+	})
+
+	t.Run("return update result if input changed", func(t *testing.T) {
+		matches := []sazed.Match{{Score: 20}}
+		fuzzy := &FakeFuzzy{matches}
+		memories := []sazed.Memory{}
+		updateMatches := sazed.UpdateMatches(fuzzy)
+
+		inputOne := "foo"
+		resultOne := updateMatches(memories, inputOne, false)()
+		assert.Equal(t, sazed.SetMatched(matches), resultOne)
+
+		inputTwo := "foo2"
+		resultTwo := updateMatches(memories, inputTwo, false)()
+		assert.Equal(t, sazed.SetMatched(matches), resultTwo)
+	})
+
+	t.Run("cleans cache", func(t *testing.T) {
+		matches := []sazed.Match{{Score: 20}}
+		fuzzy := &FakeFuzzy{matches}
+		memories := []sazed.Memory{}
+		updateMatches := sazed.UpdateMatches(fuzzy)
+
+		input := "foo"
+		result := updateMatches(memories, input, true)()
+		assert.Equal(t, sazed.SetMatched(matches), result)
+		assert.Equal(t, sazed.SetMatched(matches), result)
 	})
 }

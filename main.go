@@ -84,11 +84,15 @@ type Memory struct {
 
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
-	TextInput textinput.Model
-	AppOpts   AppOptions
-	Memories  []Memory
-	Cursor    int
-	fuzzy     IFuzzy
+	// Models & Updaters
+	TextInput     textinput.Model
+	UpdateMatches func(memories []Memory, input string, cleanCache bool) tea.Cmd
+
+	// Fields
+	AppOpts  AppOptions
+	Memories []Memory
+	Matches  []Match
+	Cursor   int
 }
 
 // Returns the initial model
@@ -96,12 +100,15 @@ func InitialModel(cliOpts AppOptions) Model {
 	textInput := textinput.New()
 	textInput.Focus()
 
+	fuzzy := NewFuzzy()
+
 	return Model{
-		TextInput: textInput,
-		AppOpts:   cliOpts,
-		Memories:  []Memory{},
-		Cursor:    0,
-		fuzzy:     NewFuzzy(),
+		TextInput:     textInput,
+		UpdateMatches: UpdateMatches(fuzzy),
+		AppOpts:       cliOpts,
+		Memories:      []Memory{},
+		Matches:       []Match{},
+		Cursor:        0,
 	}
 }
 
@@ -127,9 +134,36 @@ func InitLoadMemories(cliOpts AppOptions) tea.Cmd {
 	}
 }
 
+type SetMatched []Match
+
+// UpdateMatches is a curried function that returns a command re-calcualte matches
+func UpdateMatches(fuzzy IFuzzy) func(memories []Memory, input string, cleanCache bool) tea.Cmd {
+	first := true
+	inputCache := ""
+	return func(memories []Memory, input string, cleanCache bool) tea.Cmd {
+		return func() tea.Msg {
+			if cleanCache {
+				first = true
+				inputCache = ""
+			}
+
+			// If not first run and cache matches, return nil
+			if !first {
+				if input == inputCache {
+					return nil
+				}
+			}
+
+			first = false
+			inputCache = input
+			return SetMatched(fuzzy.GetMatches(memories, input))
+		}
+	}
+}
+
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return InitLoadMemories(m.AppOpts)
+	return tea.Sequence(InitLoadMemories(m.AppOpts))
 }
 
 // Update implements tea.Model.
@@ -163,9 +197,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case LoadedMemories:
 		m.Memories = msg
+		return m, m.UpdateMatches(m.Memories, m.TextInput.Value(), true)
+	case SetMatched:
+		m.Matches = msg
 		return m, nil
 	}
+
+	// Update the text input (since it might have changed)
 	m.TextInput, cmd = m.TextInput.Update(msg)
+
+	// Update the matches to keep it in sync with the Memories/Input that may have changed
+	cmd = tea.Batch(cmd, m.UpdateMatches(m.Memories, m.TextInput.Value(), false))
+
 	return m, cmd
 }
 
@@ -175,10 +218,7 @@ func (m Model) View() string {
 	body += m.TextInput.View() + "\n"
 	body += "----------------------\n"
 
-	inputStr := m.TextInput.Value()
-	matches := m.fuzzy.GetMatches(m.Memories, inputStr)
-
-	for i, match := range matches {
+	for i, match := range m.Matches {
 		cursor := " "
 		if i == m.Cursor {
 			cursor = ">>"
