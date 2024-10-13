@@ -250,7 +250,6 @@ func getOutputFile() *os.File {
 	return os.Stderr
 }
 
-
 func main() {
 	envOpts, err := NewAppOptionsFromEnv()
 	if err != nil {

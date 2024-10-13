@@ -144,7 +144,7 @@ func Test__InitLoadMemories(t *testing.T) {
 	t.Run("load memories from yaml", func(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "- {command: foo, description: bar}"
-		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
+		_ = os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
 		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
 
 		msg := sazed.InitLoadMemories(appOpts)()
@@ -164,7 +164,7 @@ func Test__InitLoadMemories(t *testing.T) {
 	t.Run("report error if invalid yaml", func(t *testing.T) {
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "INV{A}LID{YAML"
-		os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
+		_ = os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
 		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
 
 		msg := sazed.InitLoadMemories(appOpts)()
@@ -210,7 +210,7 @@ func Test__Update(t *testing.T) {
 		})
 
 		// User hits enter
-		m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 		// QuitWithOutput is sent
 		assert.Equal(t, sazed.QuitWithOutput(memory2().Command), cmd())
