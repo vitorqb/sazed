@@ -240,23 +240,42 @@ func exitWithErr(msg string, err error) {
 	os.Exit(1)
 }
 
+// getOutputFile returns the output to use for the program. It tries to write to
+// tty, and defaults to stdout if it can't find it.
+func getOutputFile() *os.File {
+	// tty is preferable because it works from subshells: echo "$(sazed)"
+	if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+		return tty
+	}
+	return os.Stderr
+}
+
+
 func main() {
 	envOpts, err := NewAppOptionsFromEnv()
 	if err != nil {
 		exitWithErr("failed to parse env vars", err)
 	}
+
 	appOpts, err := ParseAppOptions(os.Args[1:], envOpts)
 	if err != nil {
 		exitWithErr("failed to parse CLI args", err)
 	}
+
 	model := InitialModel(appOpts)
-	p := tea.NewProgram(model)
+
+	outputFile := getOutputFile()
+	defer outputFile.Close()
+
+	p := tea.NewProgram(model, tea.WithOutput(outputFile))
 	if _, err := p.Run(); err != nil {
 		exitWithErr("exited with error: %v", err)
 	}
+
 	if QuitErr != nil {
 		exitWithErr("error", QuitErr)
 	}
+
 	if QuitOutput != "" {
 		fmt.Print(QuitOutput)
 	}
