@@ -11,3 +11,7 @@ fmt:
 .PHONY: lint
 lint:
 	docker compose run golangci
+
+.PHONY: run
+run:
+	go run .
