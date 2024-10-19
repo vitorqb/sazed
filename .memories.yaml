@@ -1,0 +1,14 @@
+- description: Test
+  command: make test
+
+- description: Format
+  command: make fmt
+
+- description: Run
+  command: make run
+
+- description: Install
+  command: make install
+
+- description: CI Check (Test Format Run)
+  command: make test fmt run

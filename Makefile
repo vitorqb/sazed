@@ -15,3 +15,15 @@ lint:
 .PHONY: run
 run:
 	go run .
+
+.PHONY: ./sazed
+./sazed:
+	go build .
+
+build: ./sazed
+
+.PHONY: install
+install: DIR=~/.local/bin
+install: build
+	mkdir -p $(DIR)
+	install -m 744 sazed $(DIR)

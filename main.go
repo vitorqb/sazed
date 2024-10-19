@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 
 	"gopkg.in/yaml.v3"
 
@@ -56,11 +57,13 @@ func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error
 	if appOptions.CommandPrintLength == 0 {
 		appOptions.CommandPrintLength = DefaultCommandPrintLength
 	}
-
-	// sanity checks
 	if appOptions.MemoriesFile == "" {
-		return appOptions, fmt.Errorf("Missing memories file (--memories-file)")
+		homeDir, _ := os.UserHomeDir()
+		appOptions.MemoriesFile = path.Join(homeDir, ".config/sazed/memories.yaml")
 	}
+
+	// sanity check
+
 	return appOptions, nil
 }
 

@@ -98,10 +98,16 @@ func Test__ParseAppOptions(t *testing.T) {
 		}
 		assert.Equal(t, expected, parsed)
 	})
-	t.Run("missing memories file", func(t *testing.T) {
+	t.Run("defaults memories file", func(t *testing.T) {
+		t.Setenv("HOME", "/foo")
 		args := []string{}
-		_, err := sazed.ParseAppOptions(args, sazed.AppOptions{})
-		assert.ErrorContains(t, err, "--memories-file")
+		parsed, err := sazed.ParseAppOptions(args, sazed.AppOptions{})
+		assert.Nil(t, err)
+		expected := sazed.AppOptions{
+			MemoriesFile:       "/foo/.config/sazed/memories.yaml",
+			CommandPrintLength: sazed.DefaultCommandPrintLength,
+		}
+		assert.Equal(t, expected, parsed)
 	})
 }
 
