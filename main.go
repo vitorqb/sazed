@@ -21,50 +21,35 @@ type AppOptions struct {
 	CommandPrintLength int    `env:"SAZED_COMMAND_PRINT_LENGTH"`
 }
 
-// Instantiates AppOptions from environmental variables
-func NewAppOptionsFromEnv() (AppOptions, error) {
-	var appOpts AppOptions
-	err := env.Parse(&appOpts)
-	if err != nil {
-		return appOpts, fmt.Errorf("failed to parse from env: %w", err)
-	}
-	return appOpts, nil
-}
 
-// ParseAppOptions parses the app options from (a) CLI Arguments and (b)
-// a base AppOptions containing values from Env variables.
-func ParseAppOptions(cliArgs []string, envOptions AppOptions) (AppOptions, error) {
+// ParseAppOptions parses the app options from CLI Arguments a map of environmental variables
+func ParseAppOptions(cliArgs []string, envMap map[string]string) (AppOptions, error) {
+	// parse env vars
+	var opts AppOptions
+	err := env.ParseWithOptions(&opts, env.Options{Environment: envMap})
+	if err != nil {
+		return opts, fmt.Errorf("failed to parse env vars: %w", err)
+	}
+
 	// parse CLI options
-	var cliOpts AppOptions
 	flagSet := flag.NewFlagSet("sazed", flag.ContinueOnError)
-	flagSet.StringVar(&cliOpts.MemoriesFile, "memories-file", "", "File to read memories from")
-	flagSet.IntVar(&cliOpts.CommandPrintLength, "command-print-length", 0, "How many characters to print for Commands")
-	err := flagSet.Parse(cliArgs)
+	flagSet.StringVar(&opts.MemoriesFile, "memories-file", opts.MemoriesFile, "File to read memories from")
+	flagSet.IntVar(&opts.CommandPrintLength, "command-print-length", opts.CommandPrintLength, "How many characters to print for Commands")
+	err = flagSet.Parse(cliArgs)
 	if err != nil {
-		return cliOpts, err
-	}
-
-	// join CLI and Env, priority to CLI
-	appOptions := envOptions
-	if cliOpts.MemoriesFile != "" {
-		appOptions.MemoriesFile = cliOpts.MemoriesFile
-	}
-	if cliOpts.CommandPrintLength != 0 {
-		appOptions.CommandPrintLength = cliOpts.CommandPrintLength
+		return opts, fmt.Errorf("failed to parse cli args: %w", err)
 	}
 
 	// defaults
-	if appOptions.CommandPrintLength == 0 {
-		appOptions.CommandPrintLength = DefaultCommandPrintLength
+	if opts.CommandPrintLength == 0 {
+		opts.CommandPrintLength = DefaultCommandPrintLength
 	}
-	if appOptions.MemoriesFile == "" {
+	if opts.MemoriesFile == "" {
 		homeDir, _ := os.UserHomeDir()
-		appOptions.MemoriesFile = path.Join(homeDir, ".config/sazed/memories.yaml")
+		opts.MemoriesFile = path.Join(homeDir, ".config/sazed/memories.yaml")
 	}
 
-	// sanity check
-
-	return appOptions, nil
+	return opts, nil
 }
 
 // QuitWithOutput signals that the program should quit and print something to stdout.
@@ -254,12 +239,7 @@ func getOutputFile() *os.File {
 }
 
 func main() {
-	envOpts, err := NewAppOptionsFromEnv()
-	if err != nil {
-		exitWithErr("failed to parse env vars", err)
-	}
-
-	appOpts, err := ParseAppOptions(os.Args[1:], envOpts)
+	appOpts, err := ParseAppOptions(os.Args[1:], env.ToMap(os.Environ()))
 	if err != nil {
 		exitWithErr("failed to parse CLI args", err)
 	}

@@ -47,67 +47,71 @@ func batchUpdate(m tea.Model, cmd tea.Cmd) tea.Model {
 	return batchUpdate(m2, cmd)
 }
 
-func Test__NewAppOptionsFromEnv(t *testing.T) {
-	t.Cleanup(cleanup)
-	t.Run("instantiates from env vars", func(t *testing.T) {
-		t.Setenv("SAZED_MEMORIES_FILE", "/foo")
-		t.Setenv("SAZED_COMMAND_PRINT_LENGTH", "999")
-
-		envOpts, err := sazed.NewAppOptionsFromEnv()
-
-		assert.Nil(t, err)
-		assert.Equal(t, sazed.AppOptions{
-			MemoriesFile:       "/foo",
-			CommandPrintLength: 999,
-		}, envOpts)
-	})
-	t.Run("fails because wrong format of CommandPrintLength", func(t *testing.T) {
-		t.Setenv("SAZED_COMMAND_PRINT_LENGTH", "aaa")
-
-		_, err := sazed.NewAppOptionsFromEnv()
-
-		assert.ErrorContains(t, err, "CommandPrintLength")
-	})
-}
-
 func Test__ParseAppOptions(t *testing.T) {
 	t.Cleanup(cleanup)
-	t.Run("parse all args", func(t *testing.T) {
-		// Priority should be given to `args`, not `envOpts`
+
+	t.Run("all default values", func(t *testing.T) {
+		env := map[string]string{}
+		args := []string{}
+
+		opts, err := sazed.ParseAppOptions(args, env)
+
+		assert.Nil(t, err)
+		assert.Contains(t, opts.MemoriesFile, ".config/sazed/memories.yaml")
+		assert.Equal(t, opts.CommandPrintLength, sazed.DefaultCommandPrintLength)
+	})
+
+	t.Run("args have preference over env", func(t *testing.T) {
+		env := map[string]string{
+			"SAZED_MEMORIES_FILE":        "/foo",
+			"SAZED_COMMAND_PRINT_LENGTH": "40",
+		}
 		args := []string{
-			"--memories-file", "/tmp/foo",
-			"--command-print-length", "45",
+			"--memories-file=/bar",
+			"--command-print-length=999",
 		}
-		envOpts := sazed.AppOptions{MemoriesFile: "/tmp/bar"}
-		parsed, err := sazed.ParseAppOptions(args, envOpts)
+
+		opts, err := sazed.ParseAppOptions(args, env)
+
 		assert.Nil(t, err)
-		expected := sazed.AppOptions{
-			MemoriesFile:       "/tmp/foo",
-			CommandPrintLength: 45,
-		}
-		assert.Equal(t, expected, parsed)
+		assert.Equal(t, opts.MemoriesFile, "/bar")
+		assert.Equal(t, opts.CommandPrintLength, 999)
 	})
-	t.Run("parse from env", func(t *testing.T) {
-		args := []string{}
-		envOpts := sazed.AppOptions{MemoriesFile: "/tmp/foo"}
-		parsed, err := sazed.ParseAppOptions(args, envOpts)
-		assert.Nil(t, err)
-		expected := sazed.AppOptions{
-			MemoriesFile:       "/tmp/foo",
-			CommandPrintLength: sazed.DefaultCommandPrintLength,
+
+	t.Run("from env if args not set", func(t *testing.T) {
+		env := map[string]string{
+			"SAZED_MEMORIES_FILE":        "/foo",
+			"SAZED_COMMAND_PRINT_LENGTH": "40",
 		}
-		assert.Equal(t, expected, parsed)
+		args := []string{}
+
+		opts, err := sazed.ParseAppOptions(args, env)
+
+		assert.Nil(t, err)
+		assert.Equal(t, opts.MemoriesFile, "/foo")
+		assert.Equal(t, opts.CommandPrintLength, 40)
 	})
-	t.Run("defaults memories file", func(t *testing.T) {
-		t.Setenv("HOME", "/foo")
-		args := []string{}
-		parsed, err := sazed.ParseAppOptions(args, sazed.AppOptions{})
-		assert.Nil(t, err)
-		expected := sazed.AppOptions{
-			MemoriesFile:       "/foo/.config/sazed/memories.yaml",
-			CommandPrintLength: sazed.DefaultCommandPrintLength,
+
+	t.Run("errors if unexpected type (env)", func(t *testing.T) {
+		env := map[string]string{
+			"SAZED_COMMAND_PRINT_LENGTH": "a", // Should be int
 		}
-		assert.Equal(t, expected, parsed)
+		args := []string{}
+
+		_, err := sazed.ParseAppOptions(args, env)
+
+		assert.ErrorContains(t, err, "failed to parse env vars")
+	})
+
+	t.Run("errors if unexpected type (cli)", func(t *testing.T) {
+		env := map[string]string{}
+		args := []string{
+			"--command-print-length=aaa", // Should be int
+		}
+
+		_, err := sazed.ParseAppOptions(args, env)
+
+		assert.ErrorContains(t, err, "failed to parse cli args")
 	})
 }
 
