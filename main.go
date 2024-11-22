@@ -21,7 +21,6 @@ type AppOptions struct {
 	CommandPrintLength int    `env:"SAZED_COMMAND_PRINT_LENGTH"`
 }
 
-
 // ParseAppOptions parses the app options from CLI Arguments a map of environmental variables
 func ParseAppOptions(cliArgs []string, envMap map[string]string) (AppOptions, error) {
 	// parse env vars
@@ -70,6 +69,12 @@ type Memory struct {
 	Description string
 }
 
+// Page represents the possible pages the user is interacting with
+type Page string
+
+const PageSelect Page = "PageSelect"
+const PageEdit Page = "PageEdit"
+
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
 	// Models & Updaters
@@ -77,10 +82,11 @@ type Model struct {
 	UpdateMatches func(memories []Memory, input string, cleanCache bool) tea.Cmd
 
 	// Fields
-	AppOpts  AppOptions
-	Memories []Memory
-	Matches  []Match
-	Cursor   int
+	AppOpts     AppOptions
+	Memories    []Memory
+	Matches     []Match
+	MatchCursor int
+	CurrentPage Page
 }
 
 // Returns the initial model
@@ -96,7 +102,7 @@ func InitialModel(cliOpts AppOptions) Model {
 		AppOpts:       cliOpts,
 		Memories:      []Memory{},
 		Matches:       []Match{},
-		Cursor:        0,
+		MatchCursor:   0,
 	}
 }
 
@@ -149,6 +155,19 @@ func UpdateMatches(fuzzy IFuzzy) func(memories []Memory, input string, cleanCach
 	}
 }
 
+// HandleMemorySelected is a function that reacts to the user selecting a memory.
+func HandleMemorySelected(m Model) (Model, tea.Cmd) {
+	SelectedMemory := m.Matches[m.MatchCursor].Memory
+	countOfPlaceholders := CountPlaceholders(SelectedMemory)
+	if countOfPlaceholders == 0 || !FeatureFlagPlaceholder {
+		return m, func() tea.Msg {
+			return QuitWithOutput(SelectedMemory.Command)
+		}
+	}
+	m.CurrentPage = PageEdit
+	return m, nil
+}
+
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return tea.Sequence(InitLoadMemories(m.AppOpts))
@@ -165,14 +184,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.Type {
 		case tea.KeyDown:
-			m = IncreaseCursor(m)
+			m = IncreaseMatchCursor(m)
 			return m, nil
 		case tea.KeyUp:
-			m = DecreaseCursor(m)
+			m = DecreaseMatchCursor(m)
 			return m, nil
 		case tea.KeyEnter:
-			msg := QuitWithOutput(m.Matches[m.Cursor].Memory.Command)
-			return m, func() tea.Msg { return msg }
+			m, cmd := HandleMemorySelected(m)
+			return m, cmd
 		}
 	case QuitWithErr:
 		// Impure, but the only way I found to quit nicely with an error
@@ -201,26 +220,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m Model) View() string {
-	body := "Please select a command\n"
-	body += m.TextInput.View() + "\n"
-	body += "----------------------\n"
-
-	for i, match := range m.Matches {
-		cursor := " "
-		if i == m.Cursor {
-			cursor = ">>"
-		}
-		printLength := fmt.Sprintf("%d", m.AppOpts.CommandPrintLength)
-
-		// Prints command on first line
-		format := "%-2s %-" + printLength + "." + printLength + "s\n"
-		body += fmt.Sprintf(format, cursor, match.Memory.Command)
-
-		// Prints description on second line
-		body += fmt.Sprintf("      |%s\n", match.Memory.Description)
+	if m.CurrentPage == PageEdit {
+		return ViewCommandEdit(m)
 	}
-
-	return body
+	return ViewCommandSelection(m)
 }
 
 func exitWithErr(msg string, err error) {

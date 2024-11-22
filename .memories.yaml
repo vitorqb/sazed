@@ -12,3 +12,6 @@
 
 - description: CI Check (Test Format Run)
   command: make test fmt run
+
+- description: Make (generic)
+  command: make {{cmd}}

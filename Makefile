@@ -13,8 +13,9 @@ lint:
 	docker compose run golangci
 
 .PHONY: run
+run: ARGS=
 run:
-	go run .
+	go run . $(ARGS)
 
 .PHONY: ./sazed
 ./sazed:
