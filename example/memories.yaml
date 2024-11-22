@@ -6,3 +6,5 @@
   description: Finds all files with common extension
 - command: sudo systemctl restart iwd
   description: Restarts iwd
+- command: echo {{arg}}
+  description: Echos something

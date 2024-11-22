@@ -1,15 +1,15 @@
 package main
 
-func IncreaseCursor(m Model) Model {
-	if m.Cursor < len(m.Memories)-1 {
-		m.Cursor++
+func IncreaseMatchCursor(m Model) Model {
+	if m.MatchCursor < len(m.Memories)-1 {
+		m.MatchCursor++
 	}
 	return m
 }
 
-func DecreaseCursor(m Model) Model {
-	if m.Cursor > 0 {
-		m.Cursor--
+func DecreaseMatchCursor(m Model) Model {
+	if m.MatchCursor > 0 {
+		m.MatchCursor--
 	}
 	return m
 }
