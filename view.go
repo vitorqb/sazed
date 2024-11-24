@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 func ViewCommandSelection(m Model) string {
@@ -28,6 +29,11 @@ func ViewCommandSelection(m Model) string {
 }
 
 func ViewCommandEdit(m Model) string {
-
-	return "> cmd1"
+	originalCmd := m.GetSelectedMemory().Command
+	renderedCmd := Render(originalCmd, m.PlaceholderValues)
+	stringBuilder := strings.Builder{}
+	stringBuilder.WriteString("Command: ")
+	stringBuilder.WriteString(renderedCmd)
+	stringBuilder.WriteString("\n")
+	return stringBuilder.String()
 }

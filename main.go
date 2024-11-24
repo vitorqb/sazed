@@ -82,11 +82,17 @@ type Model struct {
 	UpdateMatches func(memories []Memory, input string, cleanCache bool) tea.Cmd
 
 	// Fields
-	AppOpts     AppOptions
-	Memories    []Memory
-	Matches     []Match
-	MatchCursor int
-	CurrentPage Page
+	AppOpts           AppOptions
+	Memories          []Memory
+	Matches           []Match
+	MatchCursor       int
+	CurrentPage       Page
+	PlaceholderValues []string
+}
+
+// TODO: Add possible error on return if index out of range
+func (m Model) GetSelectedMemory() Memory {
+	return m.Matches[m.MatchCursor].Memory
 }
 
 // Returns the initial model
@@ -157,8 +163,8 @@ func UpdateMatches(fuzzy IFuzzy) func(memories []Memory, input string, cleanCach
 
 // HandleMemorySelected is a function that reacts to the user selecting a memory.
 func HandleMemorySelected(m Model) (Model, tea.Cmd) {
-	SelectedMemory := m.Matches[m.MatchCursor].Memory
-	countOfPlaceholders := CountPlaceholders(SelectedMemory)
+	SelectedMemory := m.GetSelectedMemory()
+	countOfPlaceholders := CountPlaceholders(SelectedMemory.Command)
 	if countOfPlaceholders == 0 || !FeatureFlagPlaceholder {
 		return m, func() tea.Msg {
 			return QuitWithOutput(SelectedMemory.Command)
