@@ -344,7 +344,7 @@ func Test__View(t *testing.T) {
 		rendered := strings.Split(model.View(), "\n")
 
 		// Find key lines to test
-		assert.Equal(t, "> "+memory1().Command, rendered[0])
+		assert.Equal(t, "Command: "+memory1().Command, rendered[0])
 	})
 }
 
