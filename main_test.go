@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	sazed "github.com/vitorqb/sazed"
@@ -201,7 +202,7 @@ func Test__Update(t *testing.T) {
 		assert.Equal(t, []sazed.Memory(msg), model.Memories)
 	})
 	t.Run("handles enter key", func(t *testing.T) {
-		model := sazed.Model{}
+		model := sazed.InitialModel(sazed.AppOptions{})
 		model.Matches = []sazed.Match{{Memory: memory1()}}
 		msg := tea.KeyMsg{Type: tea.KeyEnter}
 		_, cmd := model.Update(msg)
@@ -348,6 +349,19 @@ func Test__View(t *testing.T) {
 	})
 }
 
+func Test__GetPlaceholderValues(t *testing.T) {
+	t.Run("Returns values from text input", func(t *testing.T) {
+		textInputs := make([]textinput.Model, 2)
+		textInputs[0] = textinput.New()
+		textInputs[0].SetValue("foo")
+		textInputs[1] = textinput.New()
+		textInputs[1].SetValue("bar")
+		m := newTestModel()
+		m.EditTextInputs = textInputs
+		assert.Equal(t, []string{"foo", "bar"}, m.GetPlaceholderValues())
+	})
+}
+
 type FakeFuzzy struct {
 	mockResult []sazed.Match
 }
@@ -438,5 +452,41 @@ func Test__HandleMemorySelected(t *testing.T) {
 
 		assert.Equal(t, m.CurrentPage, sazed.PageEdit)
 		assert.Nil(t, cmd)
+	})
+	t.Run("initialize placeholder inputs", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		m := newTestModel()
+		m.Matches = []sazed.Match{{Memory: memory4()}}
+
+		m, cmd := sazed.HandleMemorySelected(m)
+
+		assert.Len(t, m.EditTextInputs, 1)
+		assert.Equal(t, "value: ", m.EditTextInputs[0].Prompt)
+		assert.Equal(t, "", m.EditTextInputs[0].Value())
+		assert.True(t, m.EditTextInputs[0].Focused())
+		assert.Nil(t, cmd)
+	})
+}
+
+func Test__UpdateEditTextInputs(t *testing.T) {
+	t.Run("skip if not on edit page", func(t *testing.T) {
+		m := newTestModel()
+		m.CurrentPage = sazed.PageSelect
+		m.EditTextInputs = append(m.EditTextInputs, textinput.New())
+		m.EditTextInputs[0].Focus()
+		updated, cmd := m.UpdateEditTextInputs(tea.KeyMsg{})
+		assert.Nil(t, cmd)
+		assert.Equal(t, m.EditTextInputs, updated)
+	})
+	t.Run("sets value if input", func(t *testing.T) {
+		m := newTestModel()
+		m.CurrentPage = sazed.PageEdit
+		m.EditTextInputs = append(m.EditTextInputs, textinput.New())
+		m.EditTextInputs[0].Focus()
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f', 'o', 'o'}}
+		var cmd tea.Cmd
+		m.EditTextInputs, cmd = m.UpdateEditTextInputs(msg)
+		m = batchUpdate(m, cmd)
+		assert.Equal(t, "foo", m.EditTextInputs[0].Value())
 	})
 }

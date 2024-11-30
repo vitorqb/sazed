@@ -8,3 +8,5 @@
   description: Restarts iwd
 - command: echo {{arg}}
   description: Echos something
+- command: echo {{arg1}} {{arg2}}
+  description: Echos two things

@@ -78,8 +78,9 @@ const PageEdit Page = "PageEdit"
 // Basic Model for https://github.com/charmbracelet/bubbletea
 type Model struct {
 	// Models & Updaters
-	TextInput     textinput.Model
-	UpdateMatches func(memories []Memory, input string, cleanCache bool) tea.Cmd
+	SearchTextInput textinput.Model
+	EditTextInputs  []textinput.Model
+	UpdateMatches   func(memories []Memory, input string, cleanCache bool) tea.Cmd
 
 	// Fields
 	AppOpts           AppOptions
@@ -87,7 +88,6 @@ type Model struct {
 	Matches           []Match
 	MatchCursor       int
 	CurrentPage       Page
-	PlaceholderValues []string
 }
 
 // TODO: Add possible error on return if index out of range
@@ -103,12 +103,13 @@ func InitialModel(cliOpts AppOptions) Model {
 	fuzzy := NewFuzzy()
 
 	return Model{
-		TextInput:     textInput,
-		UpdateMatches: UpdateMatches(fuzzy),
-		AppOpts:       cliOpts,
-		Memories:      []Memory{},
-		Matches:       []Match{},
-		MatchCursor:   0,
+		SearchTextInput: textInput,
+		UpdateMatches:   UpdateMatches(fuzzy),
+		CurrentPage:     PageSelect,
+		AppOpts:         cliOpts,
+		Memories:        []Memory{},
+		Matches:         []Match{},
+		MatchCursor:     0,
 	}
 }
 
@@ -170,7 +171,21 @@ func HandleMemorySelected(m Model) (Model, tea.Cmd) {
 			return QuitWithOutput(SelectedMemory.Command)
 		}
 	}
+
+	// Create a text input for each placeholder
+	editTextInputs := make([]textinput.Model, countOfPlaceholders)
+	for i, placeholder := range GetPlaceholders(SelectedMemory.Command) {
+		editTextInputs[i] = textinput.New()
+		editTextInputs[i].Prompt = placeholder.Name + ": "
+		if i == 0 {
+			editTextInputs[i].Focus()
+		}
+	}
+	m.EditTextInputs = editTextInputs
+
+	// Set the current page to the edit page
 	m.CurrentPage = PageEdit
+
 	return m, nil
 }
 
@@ -188,16 +203,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		}
-		switch msg.Type {
-		case tea.KeyDown:
-			m = IncreaseMatchCursor(m)
-			return m, nil
-		case tea.KeyUp:
-			m = DecreaseMatchCursor(m)
-			return m, nil
-		case tea.KeyEnter:
-			m, cmd := HandleMemorySelected(m)
-			return m, cmd
+		if m.CurrentPage == PageSelect {
+			switch msg.Type {
+			case tea.KeyDown:
+				m = IncreaseMatchCursor(m)
+				return m, nil
+			case tea.KeyUp:
+				m = DecreaseMatchCursor(m)
+				return m, nil
+			case tea.KeyEnter:
+				m, cmd := HandleMemorySelected(m)
+				return m, cmd
+			}
 		}
 	case QuitWithErr:
 		// Impure, but the only way I found to quit nicely with an error
@@ -209,19 +226,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case LoadedMemories:
 		m.Memories = msg
-		return m, m.UpdateMatches(m.Memories, m.TextInput.Value(), true)
+		return m, m.UpdateMatches(m.Memories, m.SearchTextInput.Value(), true)
 	case SetMatched:
 		m.Matches = msg
 		return m, nil
 	}
 
 	// Update the text input (since it might have changed)
-	m.TextInput, cmd = m.TextInput.Update(msg)
+	if m.CurrentPage == PageSelect {
+		m.SearchTextInput, cmd = m.SearchTextInput.Update(msg)
+	}
+
+	// Update the Edit view text inputs
+	var editTextInputsCmds tea.Cmd
+	m.EditTextInputs, editTextInputsCmds = m.UpdateEditTextInputs(msg)
 
 	// Update the matches to keep it in sync with the Memories/Input that may have changed
-	cmd = tea.Batch(cmd, m.UpdateMatches(m.Memories, m.TextInput.Value(), false))
+	cmd = tea.Batch(cmd, m.UpdateMatches(m.Memories, m.SearchTextInput.Value(), false), editTextInputsCmds)
 
 	return m, cmd
+}
+
+// UpdateEditTextInputs updates the text inputs for the edit page
+func (m *Model) UpdateEditTextInputs(msg tea.Msg) ([]textinput.Model, tea.Cmd) {
+	if m.CurrentPage != PageEdit {
+		return m.EditTextInputs, nil
+	}
+	var cmd tea.Cmd
+	for i := 0; i < len(m.EditTextInputs); i++ {
+		var aCmd tea.Cmd
+		m.EditTextInputs[i], aCmd = m.EditTextInputs[i].Update(msg)
+		cmd = tea.Batch(cmd, aCmd)
+	}
+	return m.EditTextInputs, cmd
 }
 
 // View implements tea.Model.
@@ -230,6 +267,14 @@ func (m Model) View() string {
 		return ViewCommandEdit(m)
 	}
 	return ViewCommandSelection(m)
+}
+
+func (m Model) GetPlaceholderValues() []string {
+	out := make([]string, len(m.EditTextInputs))
+	for i, textInp := range(m.EditTextInputs) {
+		out[i] = textInp.Value()
+	}
+	return out
 }
 
 func exitWithErr(msg string, err error) {

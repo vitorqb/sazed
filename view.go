@@ -7,7 +7,7 @@ import (
 
 func ViewCommandSelection(m Model) string {
 	body := "Please select a command\n"
-	body += m.TextInput.View() + "\n"
+	body += m.SearchTextInput.View() + "\n"
 	body += "----------------------\n"
 
 	for i, match := range m.Matches {
@@ -29,11 +29,20 @@ func ViewCommandSelection(m Model) string {
 }
 
 func ViewCommandEdit(m Model) string {
+	// Displays the command with the placeholders replaced by the values
 	originalCmd := m.GetSelectedMemory().Command
-	renderedCmd := Render(originalCmd, m.PlaceholderValues)
+	placeholderValues := m.GetPlaceholderValues()
+	renderedCmd := Render(originalCmd, placeholderValues)
 	stringBuilder := strings.Builder{}
 	stringBuilder.WriteString("Command: ")
 	stringBuilder.WriteString(renderedCmd)
 	stringBuilder.WriteString("\n")
+
+	// Allow user to input values for each placeholder
+	for _, input := range m.EditTextInputs {
+		stringBuilder.WriteString(input.View())
+		stringBuilder.WriteString("\n")
+	}
+
 	return stringBuilder.String()
 }

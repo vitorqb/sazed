@@ -1,3 +1,5 @@
+DELVE_VERSION := 1.23.1
+
 default: test fmt lint
 
 .PHONY: test
@@ -28,3 +30,15 @@ install: DIR=~/.local/bin
 install: build
 	mkdir -p $(DIR)
 	install -m 744 sazed $(DIR)
+
+.PHONY: install-delve
+install-delve:
+	go install "github.com/go-delve/delve/cmd/dlv@v$(DELVE_VERSION)"
+
+.PHONY: debug-start
+debug-start: install-delve
+	dlv debug --headless --listen 'localhost:4040' .
+
+.PHONY: debug-connect
+debug-connect: install-delve
+	dlv connect :4040
