@@ -3,8 +3,9 @@ DELVE_VERSION := 1.23.1
 default: test fmt lint
 
 .PHONY: test
+test: ARGS=
 test:
-	go test -v .
+	go test -v $(ARGS) .
 
 .PHONY: fmt
 fmt:
@@ -12,7 +13,7 @@ fmt:
 
 .PHONY: lint
 lint:
-	docker compose run golangci
+	docker compose run --rm golangci
 
 .PHONY: run
 run: ARGS=
@@ -42,3 +43,8 @@ debug-start: install-delve
 .PHONY: debug-connect
 debug-connect: install-delve
 	dlv connect :4040
+
+.PHONY: debug-test
+debug-test: ARGS=
+debug-test: install-delve
+	dlv test $(ARGS) .
