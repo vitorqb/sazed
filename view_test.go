@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/stretchr/testify/assert"
 	sazed "github.com/vitorqb/sazed"
 )
@@ -12,50 +11,37 @@ import (
 func TestViewCommandEdit(t *testing.T) {
 	t.Run("Renders command on the first line", func(t *testing.T) {
 		model := sazed.InitialModel(sazed.AppOptions{})
-		model.Matches = []sazed.Match{
-			{
-				Memory: sazed.Memory{Command: "foo {{bar}} baz"},
-			},
-		}
+		model.SelectedMemory = sazed.Memory{Command: "foo {{bar}} baz"}
 		view := sazed.ViewCommandEdit(model)
 		lines := strings.Split(view, "\n")
 		assert.Equal(t, "Command: foo  baz", lines[0])
 	})
 	t.Run("Renders command on the first line (multiple placeholders)", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(true)()
 		model := sazed.InitialModel(sazed.AppOptions{})
-		model.Matches = []sazed.Match{
-			{
-				Memory: sazed.Memory{Command: "foo {{bar}} {{baz}} boz"},
-			},
-		}
+		model.SelectedMemory = memory5()
 		view := sazed.ViewCommandEdit(model)
 		lines := strings.Split(view, "\n")
-		assert.Equal(t, "Command: foo   boz", lines[0])
+		assert.Equal(t, "Command: echo   end", lines[0])
 	})
 	t.Run("Replaces placeholders for user input", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(true)()
 		model := sazed.InitialModel(sazed.AppOptions{})
-		model.Matches = []sazed.Match{
-			{
-				Memory: sazed.Memory{Command: "foo {{bar}} baz {{boz}}"},
-			},
-		}
+		model.SelectedMemory = memory5()
+		model = sazed.SetupEditTextInputs(model)
 		for i, value := range []string{"--opt1", "--opt2"} {
-			model.EditTextInputs = append(model.EditTextInputs, textinput.New())
 			model.EditTextInputs[i].SetValue(value)
 		}
 		view := sazed.ViewCommandEdit(model)
 		lines := strings.Split(view, "\n")
-		assert.Equal(t, "Command: foo --opt1 baz --opt2", lines[0])
+		assert.Equal(t, "Command: echo --opt1 --opt2 end", lines[0])
 	})
 	t.Run("Renders input for each placeholder", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		memory := sazed.Memory{Command: "foo {{bar}} baz {{boz}}"}
 		model := sazed.InitialModel(sazed.AppOptions{})
-		model.Matches = []sazed.Match{
-			{
-				Memory: sazed.Memory{Command: "foo {{bar}} baz {{boz}}"},
-			},
-		}
-		model, cmd := sazed.HandleMemorySelected(model)
-		model = batchUpdate(model, cmd)
+		model.SelectedMemory = memory
+		model = sazed.SetupEditTextInputs(model)
 		model.EditTextInputs[0].SetValue("--opt1")
 		model.EditTextInputs[1].SetValue("--opt2")
 

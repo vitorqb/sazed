@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -51,17 +52,26 @@ func ParseAppOptions(cliArgs []string, envMap map[string]string) (AppOptions, er
 	return opts, nil
 }
 
-// QuitWithOutput signals that the program should quit and print something to stdout.
-type QuitWithOutput string
-
-// QuitWithErr signals that the program should quit
-type QuitWithErr error
-
 // The error printed when after quitting the program
-var QuitErr QuitWithErr
+var QuitErr error
+
+// Quits the program with an error
+func QuitWithErr(err error) tea.Msg {
+	// Impure, but the only way I found to quit nicely with an error
+	QuitErr = err
+	return tea.Quit()
+}
 
 // An output to print when quitting
-var QuitOutput QuitWithOutput
+var QuitOutput string
+
+// Quits the program with an output
+func QuitWithOutput(output string) tea.Cmd {
+	return func() tea.Msg {
+		QuitOutput = output
+		return tea.Quit()
+	}
+}
 
 // Memory represents a memorized CLI command with it's context.
 type Memory struct {
@@ -80,36 +90,40 @@ type Model struct {
 	// Models & Updaters
 	SearchTextInput textinput.Model
 	EditTextInputs  []textinput.Model
-	UpdateMatches   func(memories []Memory, input string, cleanCache bool) tea.Cmd
+	UpdateMatches   func(m Model, cleanCache bool) Model
+	LoadMemories    func(AppOptions) tea.Cmd
 
 	// Fields
-	AppOpts           AppOptions
-	Memories          []Memory
-	Matches           []Match
-	MatchCursor       int
-	CurrentPage       Page
-}
-
-// TODO: Add possible error on return if index out of range
-func (m Model) GetSelectedMemory() Memory {
-	return m.Matches[m.MatchCursor].Memory
+	AppOpts        AppOptions
+	Memories       []Memory
+	Matches        []Match
+	MatchCursor    int
+	CurrentPage    Page
+	SelectedMemory Memory
 }
 
 // Returns the initial model
 func InitialModel(cliOpts AppOptions) Model {
 	textInput := textinput.New()
 	textInput.Focus()
+	textInput.Cursor.SetMode(cursor.CursorStatic)
 
 	fuzzy := NewFuzzy()
 
 	return Model{
+		// Models & Updaters
 		SearchTextInput: textInput,
+		EditTextInputs:  []textinput.Model{},
 		UpdateMatches:   UpdateMatches(fuzzy),
-		CurrentPage:     PageSelect,
-		AppOpts:         cliOpts,
-		Memories:        []Memory{},
-		Matches:         []Match{},
-		MatchCursor:     0,
+		LoadMemories:    InitLoadMemories,
+
+		// Fields
+		CurrentPage:    PageSelect,
+		AppOpts:        cliOpts,
+		Memories:       []Memory{},
+		Matches:        []Match{},
+		MatchCursor:    0,
+		SelectedMemory: Memory{},
 	}
 }
 
@@ -137,66 +151,68 @@ func InitLoadMemories(cliOpts AppOptions) tea.Cmd {
 
 type SetMatched []Match
 
-// UpdateMatches is a curried function that returns a command re-calcualte matches
-func UpdateMatches(fuzzy IFuzzy) func(memories []Memory, input string, cleanCache bool) tea.Cmd {
+// UpdateMatches recalculate the matches for the given user input and list of memories
+func UpdateMatches(fuzzy IFuzzy) func(m Model, cleanCache bool) Model {
 	first := true
 	inputCache := ""
-	return func(memories []Memory, input string, cleanCache bool) tea.Cmd {
-		return func() tea.Msg {
-			if cleanCache {
-				first = true
-				inputCache = ""
-			}
-
-			// If not first run and cache matches, return nil
-			if !first {
-				if input == inputCache {
-					return nil
-				}
-			}
-
-			first = false
-			inputCache = input
-			return SetMatched(fuzzy.GetMatches(memories, input))
+	return func(m Model, cleanCache bool) Model {
+		memories := m.Memories
+		input := m.SearchTextInput.Value()
+		if cleanCache {
+			first = true
+			inputCache = ""
 		}
+		if !first {
+			if input == inputCache {
+				return m
+			}
+		}
+		first = false
+		inputCache = input
+		m.Matches = fuzzy.GetMatches(memories, input)
+		return m
 	}
 }
 
-// HandleMemorySelected is a function that reacts to the user selecting a memory.
-func HandleMemorySelected(m Model) (Model, tea.Cmd) {
-	SelectedMemory := m.GetSelectedMemory()
-	countOfPlaceholders := CountPlaceholders(SelectedMemory.Command)
-	if countOfPlaceholders == 0 || !FeatureFlagPlaceholder {
-		return m, func() tea.Msg {
-			return QuitWithOutput(SelectedMemory.Command)
-		}
+// SelectCursorMemory is the logic fo when a new memory is selected based on
+// existing cursor.
+func SelectCursorMemory(m Model) (newModel Model, quitCmd tea.Cmd) {
+	m.SelectedMemory = m.Matches[m.MatchCursor].Memory
+	if !NeedsEdit(m.SelectedMemory) {
+		return m, QuitWithOutput(m.SelectedMemory.Command)
 	}
-
-	// Create a text input for each placeholder
-	editTextInputs := make([]textinput.Model, countOfPlaceholders)
-	for i, placeholder := range GetPlaceholders(SelectedMemory.Command) {
-		editTextInputs[i] = textinput.New()
-		editTextInputs[i].Prompt = placeholder.Name + ": "
-		if i == 0 {
-			editTextInputs[i].Focus()
-		}
-	}
-	m.EditTextInputs = editTextInputs
-
-	// Set the current page to the edit page
+	m = SetupEditTextInputs(m)
 	m.CurrentPage = PageEdit
-
 	return m, nil
 }
 
-// Init implements tea.Model.
-func (m Model) Init() tea.Cmd {
-	return tea.Sequence(InitLoadMemories(m.AppOpts))
+// SetupEditTextInputs prepares the TextInputs for the Edit page
+func SetupEditTextInputs(m Model) Model {
+	mem := m.SelectedMemory
+	m.EditTextInputs = make([]textinput.Model, CountPlaceholders(mem.Command))
+	for i, placeholder := range GetPlaceholders(mem.Command) {
+		m.EditTextInputs[i] = textinput.New()
+		m.EditTextInputs[i].Cursor.SetMode(cursor.CursorStatic)
+		m.EditTextInputs[i].Prompt = placeholder.Name + ": "
+		if i == 0 {
+			m.EditTextInputs[i].Focus()
+		}
+	}
+	return m
 }
+
+// LoadMemories handle memories loaded
+func LoadMemories(m Model, mems []Memory) Model {
+	m.Memories = mems
+	m = m.UpdateMatches(m, true)
+	return m
+}
+
+// Init implements tea.Model.
+func (m Model) Init() tea.Cmd { return m.LoadMemories(m.AppOpts) }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -206,31 +222,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.CurrentPage == PageSelect {
 			switch msg.Type {
 			case tea.KeyDown:
-				m = IncreaseMatchCursor(m)
-				return m, nil
+				return IncreaseMatchCursor(m), nil
 			case tea.KeyUp:
-				m = DecreaseMatchCursor(m)
-				return m, nil
+				return DecreaseMatchCursor(m), nil
 			case tea.KeyEnter:
-				m, cmd := HandleMemorySelected(m)
-				return m, cmd
+				return SelectCursorMemory(m)
 			}
 		}
-	case QuitWithErr:
-		// Impure, but the only way I found to quit nicely with an error
-		QuitErr = msg
-		return m, tea.Quit
-	case QuitWithOutput:
-		// Impure, but the only way I found to quit nicely with an output
-		QuitOutput = msg
-		return m, tea.Quit
 	case LoadedMemories:
-		m.Memories = msg
-		return m, m.UpdateMatches(m.Memories, m.SearchTextInput.Value(), true)
+		return LoadMemories(m, msg), nil
 	case SetMatched:
 		m.Matches = msg
 		return m, nil
 	}
+
+	// Cmd to return
+	var cmd tea.Cmd
 
 	// Update the text input (since it might have changed)
 	if m.CurrentPage == PageSelect {
@@ -238,11 +245,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update the Edit view text inputs
-	var editTextInputsCmds tea.Cmd
-	m.EditTextInputs, editTextInputsCmds = m.UpdateEditTextInputs(msg)
+	if m.CurrentPage == PageEdit {
+		var editTextInputsCmds tea.Cmd
+		m.EditTextInputs, editTextInputsCmds = m.UpdateEditTextInputs(msg)
+		cmd = tea.Batch(cmd, editTextInputsCmds)
+	}
 
 	// Update the matches to keep it in sync with the Memories/Input that may have changed
-	cmd = tea.Batch(cmd, m.UpdateMatches(m.Memories, m.SearchTextInput.Value(), false), editTextInputsCmds)
+	m = m.UpdateMatches(m, false)
 
 	return m, cmd
 }
@@ -271,7 +281,7 @@ func (m Model) View() string {
 
 func (m Model) GetPlaceholderValues() []string {
 	out := make([]string, len(m.EditTextInputs))
-	for i, textInp := range(m.EditTextInputs) {
+	for i, textInp := range m.EditTextInputs {
 		out[i] = textInp.Value()
 	}
 	return out
@@ -290,6 +300,17 @@ func getOutputFile() *os.File {
 		return tty
 	}
 	return os.Stderr
+}
+
+// NeedsEdit returns True if a memory needs to be edited before returning
+func NeedsEdit(m Memory) bool {
+	if !FeatureFlagPlaceholder {
+		return false
+	}
+	if countOfPlace := CountPlaceholders(m.Command); countOfPlace == 0 {
+		return false
+	}
+	return true
 }
 
 func main() {

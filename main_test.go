@@ -16,6 +16,7 @@ import (
 func cleanup() {
 	// Cleanup the global QuitErr
 	sazed.QuitErr = nil
+	sazed.QuitOutput = ""
 }
 func memory1() sazed.Memory {
 	return sazed.Memory{Command: "cmd1", Description: "Memory 1"}
@@ -31,6 +32,10 @@ func memory3() sazed.Memory {
 
 func memory4() sazed.Memory {
 	return sazed.Memory{Command: "echo {{value}}", Description: "not bar"}
+}
+
+func memory5() sazed.Memory {
+	return sazed.Memory{Command: "echo {{value1}} {{value2}} end", Description: "not bar"}
 }
 
 func newTestModel() sazed.Model {
@@ -172,14 +177,17 @@ func Test__InitLoadMemories(t *testing.T) {
 		}))
 	})
 	t.Run("report error if loaded from file", func(t *testing.T) {
+		defer cleanup()
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		appOpts := sazed.AppOptions{MemoriesFile: memoriesFile}
 
 		msg := sazed.InitLoadMemories(appOpts)()
 
-		assert.ErrorContains(t, msg.(error), "file")
+		assert.Equal(t, tea.QuitMsg{}, msg)
+		assert.ErrorContains(t, sazed.QuitErr, "file")
 	})
 	t.Run("report error if invalid yaml", func(t *testing.T) {
+		defer cleanup()
 		memoriesFile := path.Join(t.TempDir(), "foo")
 		memoriesFileContent := "INV{A}LID{YAML"
 		_ = os.WriteFile(memoriesFile, []byte(memoriesFileContent), 0644)
@@ -187,50 +195,61 @@ func Test__InitLoadMemories(t *testing.T) {
 
 		msg := sazed.InitLoadMemories(appOpts)()
 
-		assert.ErrorContains(t, msg.(error), "unmarshal error")
+		assert.Equal(t, tea.QuitMsg{}, msg)
+		assert.ErrorContains(t, sazed.QuitErr, "unmarshal error")
 	})
+}
+
+func Test__LoadMemories(t *testing.T) {
+	t.Cleanup(cleanup)
+
+	memories := []sazed.Memory{memory1()}
+	m := newTestModel()
+	m = sazed.LoadMemories(m, memories)
+	assert.Equal(t, memories, m.Memories)
+	assert.Len(t, m.Matches, 1)
 }
 
 func Test__Update(t *testing.T) {
 	t.Cleanup(cleanup)
-	t.Run("handles LoadedMemories", func(t *testing.T) {
-		model := newTestModel()
-		msg := sazed.LoadedMemories([]sazed.Memory{
-			{Command: "foo", Description: "bar"},
-		})
-		model = update(model, msg)
-		assert.Equal(t, []sazed.Memory(msg), model.Memories)
-	})
+
 	t.Run("handles enter key", func(t *testing.T) {
-		model := sazed.InitialModel(sazed.AppOptions{})
-		model.Matches = []sazed.Match{{Memory: memory1()}}
-		msg := tea.KeyMsg{Type: tea.KeyEnter}
-		_, cmd := model.Update(msg)
+		defer cleanup()
+		model := newTestModel()
+		// Load memories
+		model = sazed.LoadMemories(model, []sazed.Memory{memory1()})
+		// User writes and matches first one
+		model.SearchTextInput.SetValue(memory1().Description)
+		// Update matches with user input
+		model = model.UpdateMatches(model, true)
+		// User hits enter
+		teaModel, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-		// Runs the command. It must return a msg telling the program to quit
-		// with output.
-		newMsg := cmd()
-		assert.Equal(t, sazed.QuitWithOutput(memory1().Command), newMsg)
-
+		// We quit with msg after setting the selected memory
+		assert.Equal(t, tea.QuitMsg{}, cmd())
+		assert.Equal(t, memory1().Command, sazed.QuitOutput)
+		assert.Equal(t, memory1(), teaModel.(sazed.Model).SelectedMemory)
 	})
 	t.Run("selects memory from user input (no placeholder)", func(t *testing.T) {
+		defer cleanup()
+		model := newTestModel()
 		// Load memories
 		memories := []sazed.Memory{memory1(), memory2()}
-		m := update(newTestModel(), sazed.LoadedMemories(memories))
+		model = sazed.LoadMemories(model, memories)
 
 		// User inputs Bar and selects second memory
-		m = update(m, tea.KeyMsg{
-			Type:  tea.KeyRunes,
-			Runes: []rune{'b', 'a', 'r'},
-		})
+		model.SearchTextInput.SetValue("bar")
+		model = model.UpdateMatches(model, true)
 
 		// User hits enter
-		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		model, cmd := sazed.SelectCursorMemory(model)
 
 		// QuitWithOutput is sent
-		assert.Equal(t, sazed.QuitWithOutput(memory2().Command), cmd())
+		assert.Equal(t, tea.QuitMsg{}, cmd())
+		assert.Equal(t, memory2().Command, sazed.QuitOutput)
 	})
 	t.Run("selects memory fom user with placehold FF off", func(t *testing.T) {
+		defer cleanup()
 		defer sazed.SetFeatureFlagPlaceholder(false)()
 
 		// Load memories
@@ -241,7 +260,8 @@ func Test__Update(t *testing.T) {
 		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 		// QuitWithOutput is sent
-		assert.Equal(t, sazed.QuitWithOutput(memory4().Command), cmd())
+		assert.Equal(t, tea.QuitMsg{}, cmd())
+		assert.Equal(t, memory4().Command, sazed.QuitOutput)
 	})
 	t.Run("selects memory from user input with placehoder FF on", func(t *testing.T) {
 		defer sazed.SetFeatureFlagPlaceholder(true)()
@@ -337,19 +357,25 @@ func Test__View(t *testing.T) {
 	})
 	t.Run("renders edit view", func(t *testing.T) {
 		// Prepare model with view and page
-		memories := sazed.LoadedMemories([]sazed.Memory{memory1(), memory2(), memory3()})
-		model := update(newTestModel(), memories)
-		model.CurrentPage = sazed.PageEdit
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		var cmd tea.Cmd
+		var m tea.Model = newTestModel()
+		m, cmd = m.Update(sazed.LoadedMemories([]sazed.Memory{memory4()}))
+		assert.Nil(t, cmd)
+		m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		assert.Nil(t, cmd)
 
 		// Render
-		rendered := strings.Split(model.View(), "\n")
+		rendered := strings.Split(m.View(), "\n")
 
 		// Find key lines to test
-		assert.Equal(t, "Command: "+memory1().Command, rendered[0])
+		assert.Equal(t, sazed.PageEdit, m.(sazed.Model).CurrentPage)
+		assert.Equal(t, "Command: echo ", rendered[0])
 	})
 }
 
 func Test__GetPlaceholderValues(t *testing.T) {
+	t.Cleanup(cleanup)
 	t.Run("Returns values from text input", func(t *testing.T) {
 		textInputs := make([]textinput.Model, 2)
 		textInputs[0] = textinput.New()
@@ -371,100 +397,124 @@ func (f *FakeFuzzy) GetMatches(memories []sazed.Memory, input string) []sazed.Ma
 }
 
 func Test__UpdateMatches(t *testing.T) {
-	t.Run("no memories no input", func(t *testing.T) {
-		fuzzy := &FakeFuzzy{[]sazed.Match{}}
-		memories := []sazed.Memory{}
-		input := ""
-		updateMatches := sazed.UpdateMatches(fuzzy)
+	t.Cleanup(cleanup)
 
-		result := updateMatches(memories, input, false)()
-
-		assert.Equal(t, sazed.SetMatched([]sazed.Match{}), result)
+	t.Run("skip if no memories and no input", func(t *testing.T) {
+		updateMatches := sazed.UpdateMatches(&FakeFuzzy{[]sazed.Match{}})
+		model := newTestModel()
+		model.SearchTextInput.SetValue("")
+		model.Memories = []sazed.Memory{}
+		model = updateMatches(model, false)
+		assert.Equal(t, []sazed.Match{}, model.Matches)
 	})
 
-	t.Run("return nil if input unchanged input", func(t *testing.T) {
-		matches := []sazed.Match{{Score: 20}}
-		fuzzy := &FakeFuzzy{matches}
-		memories := []sazed.Memory{}
-		input := "foo"
-		updateMatches := sazed.UpdateMatches(fuzzy)
+	t.Run("don't change matches if unchanged input", func(t *testing.T) {
+		oldMatches := []sazed.Match{{Score: 20}}
+		newMatches := []sazed.Match{{Score: 30}}
+		updateMatches := sazed.UpdateMatches(&FakeFuzzy{newMatches})
+		model := newTestModel()
+		model.Matches = oldMatches
 
-		resultOne := updateMatches(memories, input, false)()
-		assert.Equal(t, sazed.SetMatched(matches), resultOne)
+		// Fist call with "foo", ignore results
+		model.SearchTextInput.SetValue("foo")
+		_ = updateMatches(model, false)
 
-		resultTwo := updateMatches(memories, input, false)()
-		assert.Equal(t, nil, resultTwo)
+		// Second call with "foo", save results
+		model.SearchTextInput.SetValue("foo")
+		model = updateMatches(model, false)
+
+		// Old matches are still there (cache)
+		assert.Equal(t, oldMatches, model.Matches)
 	})
 
 	t.Run("return update result if input changed", func(t *testing.T) {
-		matches := []sazed.Match{{Score: 20}}
-		fuzzy := &FakeFuzzy{matches}
-		memories := []sazed.Memory{}
-		updateMatches := sazed.UpdateMatches(fuzzy)
+		oldMatches := []sazed.Match{{Score: 20}}
+		newMatches := []sazed.Match{{Score: 30}}
+		updateMatches := sazed.UpdateMatches(&FakeFuzzy{newMatches})
+		model := newTestModel()
+		model.Matches = oldMatches
 
-		inputOne := "foo"
-		resultOne := updateMatches(memories, inputOne, false)()
-		assert.Equal(t, sazed.SetMatched(matches), resultOne)
+		// Fist call with "foo", ignore results
+		model.SearchTextInput.SetValue("foo")
+		_ = updateMatches(model, false)
 
-		inputTwo := "foo2"
-		resultTwo := updateMatches(memories, inputTwo, false)()
-		assert.Equal(t, sazed.SetMatched(matches), resultTwo)
+		// Second call wth "bar"
+		model.SearchTextInput.SetValue("bar")
+		model = updateMatches(model, false)
+
+		// New matches are set
+		assert.Equal(t, newMatches, model.Matches)
 	})
 
-	t.Run("cleans cache", func(t *testing.T) {
-		matches := []sazed.Match{{Score: 20}}
-		fuzzy := &FakeFuzzy{matches}
-		memories := []sazed.Memory{}
-		updateMatches := sazed.UpdateMatches(fuzzy)
+	t.Run("updates matches if cache clean", func(t *testing.T) {
+		oldMatches := []sazed.Match{{Score: 20}}
+		newMatches := []sazed.Match{{Score: 30}}
+		updateMatches := sazed.UpdateMatches(&FakeFuzzy{newMatches})
+		model := newTestModel()
+		model.Matches = oldMatches
 
-		input := "foo"
-		result := updateMatches(memories, input, true)()
-		assert.Equal(t, sazed.SetMatched(matches), result)
-		assert.Equal(t, sazed.SetMatched(matches), result)
+		// Fist call with "foo", ignore results
+		model.SearchTextInput.SetValue("foo")
+		_ = updateMatches(model, false)
+
+		// Second call with "foo", save results
+		model.SearchTextInput.SetValue("foo")
+		model = updateMatches(model, true)
+
+		// New matches are there since we cleaned cache
+		assert.Equal(t, newMatches, model.Matches)
 	})
 }
 
-func Test__HandleMemorySelected(t *testing.T) {
-	t.Run("delegates to quit if FF is false", func(t *testing.T) {
+func Test__SelectCursorMemory(t *testing.T) {
+	t.Cleanup(cleanup)
+
+	t.Run("quits if memory does not need edit", func(t *testing.T) {
+		m := newTestModel()
+		m = sazed.LoadMemories(m, []sazed.Memory{memory1()})
+
+		m, cmd := sazed.SelectCursorMemory(m)
+
+		assert.Equal(t, m.SelectedMemory, memory1())
+		assert.Equal(t, sazed.QuitWithOutput(memory1().Command)(), cmd())
+	})
+	t.Run("quits if memory has placeholders but FF is off", func(t *testing.T) {
 		defer sazed.SetFeatureFlagPlaceholder(false)()
 		m := newTestModel()
-		m.Matches = []sazed.Match{{Memory: memory4()}}
+		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
 
-		m, cmd := sazed.HandleMemorySelected(m)
+		m, cmd := sazed.SelectCursorMemory(m)
 
-		assert.Equal(t, sazed.QuitWithOutput(memory4().Command), cmd())
+		assert.Equal(t, m.SelectedMemory, memory5())
+		assert.Equal(t, sazed.QuitWithOutput(memory5().Command)(), cmd())
 	})
-	t.Run("delegates to quit if no placeholder", func(t *testing.T) {
+	t.Run("goes to edit if memory has placeholders and FF on", func(t *testing.T) {
 		defer sazed.SetFeatureFlagPlaceholder(true)()
 		m := newTestModel()
-		m.Matches = []sazed.Match{{Memory: memory1()}}
+		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
 
-		m, cmd := sazed.HandleMemorySelected(m)
+		m, cmd := sazed.SelectCursorMemory(m)
 
-		assert.Equal(t, sazed.QuitWithOutput(memory1().Command), cmd())
-	})
-	t.Run("delegates to edit mode if placeholder", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
-		m := newTestModel()
-		m.Matches = []sazed.Match{{Memory: memory4()}}
-
-		m, cmd := sazed.HandleMemorySelected(m)
-
+		assert.Nil(t, cmd)
+		assert.Equal(t, m.SelectedMemory, memory5())
 		assert.Equal(t, m.CurrentPage, sazed.PageEdit)
-		assert.Nil(t, cmd)
+		assert.Len(t, m.EditTextInputs, 2)
+		assert.Equal(t, "value1: ", m.EditTextInputs[0].Prompt)
 	})
-	t.Run("initialize placeholder inputs", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
+}
+
+func Test__SetupEditTextInputs(t *testing.T) {
+	t.Cleanup(cleanup)
+
+	t.Run("Creates 2 text inputs for 2 placeholders", func(t *testing.T) {
 		m := newTestModel()
-		m.Matches = []sazed.Match{{Memory: memory4()}}
+		m.SelectedMemory = memory5()
 
-		m, cmd := sazed.HandleMemorySelected(m)
+		m = sazed.SetupEditTextInputs(m)
 
-		assert.Len(t, m.EditTextInputs, 1)
-		assert.Equal(t, "value: ", m.EditTextInputs[0].Prompt)
-		assert.Equal(t, "", m.EditTextInputs[0].Value())
-		assert.True(t, m.EditTextInputs[0].Focused())
-		assert.Nil(t, cmd)
+		assert.Len(t, m.EditTextInputs, 2)                      // 2 placeholders
+		assert.True(t, m.EditTextInputs[0].Focused())           // 1st is focused
+		assert.Equal(t, "value2: ", m.EditTextInputs[1].Prompt) // Pompt is there
 	})
 }
 
@@ -480,13 +530,32 @@ func Test__UpdateEditTextInputs(t *testing.T) {
 	})
 	t.Run("sets value if input", func(t *testing.T) {
 		m := newTestModel()
-		m.CurrentPage = sazed.PageEdit
-		m.EditTextInputs = append(m.EditTextInputs, textinput.New())
-		m.EditTextInputs[0].Focus()
+		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
+		m = m.UpdateMatches(m, true)
+		m, _ = sazed.SelectCursorMemory(m)
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f', 'o', 'o'}}
 		var cmd tea.Cmd
 		m.EditTextInputs, cmd = m.UpdateEditTextInputs(msg)
 		m = batchUpdate(m, cmd)
 		assert.Equal(t, "foo", m.EditTextInputs[0].Value())
+	})
+}
+
+func Test__NeedsEdit(t *testing.T) {
+	t.Run("FF is on", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		assert.False(t, sazed.NeedsEdit(memory1()))
+		assert.False(t, sazed.NeedsEdit(memory2()))
+		assert.False(t, sazed.NeedsEdit(memory3()))
+		assert.True(t, sazed.NeedsEdit(memory4()))
+		assert.True(t, sazed.NeedsEdit(memory5()))
+	})
+	t.Run("FF is off", func(t *testing.T) {
+		defer sazed.SetFeatureFlagPlaceholder(false)()
+		assert.False(t, sazed.NeedsEdit(memory1()))
+		assert.False(t, sazed.NeedsEdit(memory2()))
+		assert.False(t, sazed.NeedsEdit(memory3()))
+		assert.False(t, sazed.NeedsEdit(memory4()))
+		assert.False(t, sazed.NeedsEdit(memory5()))
 	})
 }
