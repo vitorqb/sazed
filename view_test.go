@@ -17,7 +17,6 @@ func TestViewCommandEdit(t *testing.T) {
 		assert.Equal(t, "Command: foo  baz", lines[0])
 	})
 	t.Run("Renders command on the first line (multiple placeholders)", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		model := sazed.InitialModel(sazed.AppOptions{})
 		model.SelectedMemory = memory5()
 		view := sazed.ViewCommandEdit(model)
@@ -25,7 +24,6 @@ func TestViewCommandEdit(t *testing.T) {
 		assert.Equal(t, "Command: echo   end", lines[0])
 	})
 	t.Run("Replaces placeholders for user input", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		model := sazed.InitialModel(sazed.AppOptions{})
 		model.SelectedMemory = memory5()
 		model = sazed.SetupEditTextInputs(model)
@@ -37,7 +35,6 @@ func TestViewCommandEdit(t *testing.T) {
 		assert.Equal(t, "Command: echo --opt1 --opt2 end", lines[0])
 	})
 	t.Run("Renders input for each placeholder", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		memory := sazed.Memory{Command: "foo {{bar}} baz {{boz}}"}
 		model := sazed.InitialModel(sazed.AppOptions{})
 		model.SelectedMemory = memory

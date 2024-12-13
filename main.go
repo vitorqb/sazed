@@ -345,13 +345,7 @@ func getOutputFile() *os.File {
 
 // NeedsEdit returns True if a memory needs to be edited before returning
 func NeedsEdit(m Memory) bool {
-	if !FeatureFlagPlaceholder {
-		return false
-	}
-	if countOfPlace := CountPlaceholders(m.Command); countOfPlace == 0 {
-		return false
-	}
-	return true
+	return !(CountPlaceholders(m.Command) == 0)
 }
 
 func main() {

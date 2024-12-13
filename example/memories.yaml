@@ -2,7 +2,7 @@
   description: Stop all running docker containers
 - command: "git config --local user.email 'myemail@gmail.com' && git config --local user.name 'Some User'"
   description: Configures git to Some User
-- command: find -iname '*.<ext>'
+- command: find -iname '*.{{ext}}'
   description: Finds all files with common extension
 - command: sudo systemctl restart iwd
   description: Restarts iwd
