@@ -4,6 +4,7 @@ queue_rules:
     queue_conditions:
       - 'author = renovate[bot]'
       - '#commits-behind = 0'
+      - 'label = mergeable'
     merge_method: rebase
   
   - name: default
