@@ -1,0 +1,21 @@
+queue_rules:
+  
+  - name: renovate
+    queue_conditions:
+      - 'author = renovate[bot]'
+      - '#commits-behind = 0'
+    merge_method: rebase
+  
+  - name: default
+    queue_conditions:
+      - 'author != renovate[bot]'
+      - 'label = mergeable'
+    merge_method: rebase
+
+pull_request_rules:
+
+  - name: Automatic merge
+    description: Merge PRs automatically on matching queue
+    conditions: []
+    actions:
+      queue:
