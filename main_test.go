@@ -503,6 +503,39 @@ func Test__SelectCursorMemory(t *testing.T) {
 	})
 }
 
+func Test__SubmitPlaceholderValueFromInput(t *testing.T) {
+	t.Cleanup(cleanup)
+	t.Run("when editing a single input quits with msg", func(t *testing.T) {
+		defer cleanup()
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		m := newTestModel()
+		m = sazed.LoadMemories(m, []sazed.Memory{memory4()})
+		m, cmd := sazed.SelectCursorMemory(m)
+		assert.Nil(t, cmd)
+		m.EditTextInputs[0].SetValue("foo")
+
+		m, cmd = sazed.SubmitPlaceholderValueFromInput(m)
+
+		assert.Equal(t, tea.QuitMsg{}, cmd())
+		assert.Equal(t, sazed.QuitOutput, "echo foo")
+	})
+	t.Run("when editing firs of two inputs dont quit", func(t *testing.T) {
+		defer cleanup()
+		defer sazed.SetFeatureFlagPlaceholder(true)()
+		m := newTestModel()
+		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
+		m, cmd := sazed.SelectCursorMemory(m)
+		assert.Nil(t, cmd)
+		m.EditTextInputs[0].SetValue("foo")
+
+		m, cmd = sazed.SubmitPlaceholderValueFromInput(m)
+
+		assert.Nil(t, cmd)
+		assert.False(t, m.EditTextInputs[0].Focused())
+		assert.True(t, m.EditTextInputs[1].Focused())
+	})
+}
+
 func Test__SetupEditTextInputs(t *testing.T) {
 	t.Cleanup(cleanup)
 
