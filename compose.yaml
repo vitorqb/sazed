@@ -1,7 +1,7 @@
 
 services:
   golangci:
-    image: golangci/golangci-lint:v1.61.0
+    image: golangci/golangci-lint:v1.62.2
     command: [golangci-lint, run, -v]
     working_dir: /app
     volumes:
