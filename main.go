@@ -186,6 +186,41 @@ func SelectCursorMemory(m Model) (newModel Model, quitCmd tea.Cmd) {
 	return m, nil
 }
 
+// SubmitPlaceholderValueFromInput is called when an user submits the value
+// of the current placeholder value input
+func SubmitPlaceholderValueFromInput(m Model) (Model, tea.Cmd) {
+
+	// Find focusde input
+	focusedInputIndex := -1
+	for i, input := range m.EditTextInputs {
+		if input.Focused() {
+			focusedInputIndex = i
+			break
+		}
+	}
+
+	// If none default to the first input
+	if focusedInputIndex == -1 {
+		focusedInputIndex = 0
+	}
+
+	hasNextInput := len(m.EditTextInputs) >= (focusedInputIndex + 2)
+
+	// No next input, render and return
+	if !hasNextInput {
+		placeholderValues := make([]string, len(m.EditTextInputs))
+		for i, input := range m.EditTextInputs {
+			placeholderValues[i] = input.Value()
+		}
+		rendered := Render(m.SelectedMemory.Command, placeholderValues)
+		return m, QuitWithOutput(rendered)
+	}
+
+	// Focus next input
+	m.EditTextInputs[focusedInputIndex].Blur()
+	return m, tea.Batch(m.EditTextInputs[focusedInputIndex+1].Focus())
+}
+
 // SetupEditTextInputs prepares the TextInputs for the Edit page
 func SetupEditTextInputs(m Model) Model {
 	mem := m.SelectedMemory
@@ -219,7 +254,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		}
-		if m.CurrentPage == PageSelect {
+		switch m.CurrentPage {
+		case PageSelect:
 			switch msg.Type {
 			case tea.KeyDown:
 				return IncreaseMatchCursor(m), nil
@@ -227,6 +263,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return DecreaseMatchCursor(m), nil
 			case tea.KeyEnter:
 				return SelectCursorMemory(m)
+			}
+		case PageEdit:
+			switch msg.Type {
+			case tea.KeyEnter:
+				return SubmitPlaceholderValueFromInput(m)
 			}
 		}
 	case LoadedMemories:
