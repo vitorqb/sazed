@@ -248,24 +248,7 @@ func Test__Update(t *testing.T) {
 		assert.Equal(t, tea.QuitMsg{}, cmd())
 		assert.Equal(t, memory2().Command, sazed.QuitOutput)
 	})
-	t.Run("selects memory fom user with placehold FF off", func(t *testing.T) {
-		defer cleanup()
-		defer sazed.SetFeatureFlagPlaceholder(false)()
-
-		// Load memories
-		memories := []sazed.Memory{memory4()}
-		m := update(newTestModel(), sazed.LoadedMemories(memories))
-
-		// User hits enter
-		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-		// QuitWithOutput is sent
-		assert.Equal(t, tea.QuitMsg{}, cmd())
-		assert.Equal(t, memory4().Command, sazed.QuitOutput)
-	})
-	t.Run("selects memory from user input with placehoder FF on", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
-
+	t.Run("selects memory from user input with placehoder", func(t *testing.T) {
 		// Load memories
 		memories := []sazed.Memory{memory4()}
 		m := update(newTestModel(), sazed.LoadedMemories(memories))
@@ -357,7 +340,6 @@ func Test__View(t *testing.T) {
 	})
 	t.Run("renders edit view", func(t *testing.T) {
 		// Prepare model with view and page
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		var cmd tea.Cmd
 		var m tea.Model = newTestModel()
 		m, cmd = m.Update(sazed.LoadedMemories([]sazed.Memory{memory4()}))
@@ -478,18 +460,7 @@ func Test__SelectCursorMemory(t *testing.T) {
 		assert.Equal(t, m.SelectedMemory, memory1())
 		assert.Equal(t, sazed.QuitWithOutput(memory1().Command)(), cmd())
 	})
-	t.Run("quits if memory has placeholders but FF is off", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(false)()
-		m := newTestModel()
-		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
-
-		m, cmd := sazed.SelectCursorMemory(m)
-
-		assert.Equal(t, m.SelectedMemory, memory5())
-		assert.Equal(t, sazed.QuitWithOutput(memory5().Command)(), cmd())
-	})
-	t.Run("goes to edit if memory has placeholders and FF on", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
+	t.Run("goes to edit if memory has placeholders", func(t *testing.T) {
 		m := newTestModel()
 		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
 
@@ -507,7 +478,6 @@ func Test__SubmitPlaceholderValueFromInput(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Run("when editing a single input quits with msg", func(t *testing.T) {
 		defer cleanup()
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		m := newTestModel()
 		m = sazed.LoadMemories(m, []sazed.Memory{memory4()})
 		m, cmd := sazed.SelectCursorMemory(m)
@@ -521,7 +491,6 @@ func Test__SubmitPlaceholderValueFromInput(t *testing.T) {
 	})
 	t.Run("when editing firs of two inputs dont quit", func(t *testing.T) {
 		defer cleanup()
-		defer sazed.SetFeatureFlagPlaceholder(true)()
 		m := newTestModel()
 		m = sazed.LoadMemories(m, []sazed.Memory{memory5()})
 		m, cmd := sazed.SelectCursorMemory(m)
@@ -575,20 +544,9 @@ func Test__UpdateEditTextInputs(t *testing.T) {
 }
 
 func Test__NeedsEdit(t *testing.T) {
-	t.Run("FF is on", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(true)()
-		assert.False(t, sazed.NeedsEdit(memory1()))
-		assert.False(t, sazed.NeedsEdit(memory2()))
-		assert.False(t, sazed.NeedsEdit(memory3()))
-		assert.True(t, sazed.NeedsEdit(memory4()))
-		assert.True(t, sazed.NeedsEdit(memory5()))
-	})
-	t.Run("FF is off", func(t *testing.T) {
-		defer sazed.SetFeatureFlagPlaceholder(false)()
-		assert.False(t, sazed.NeedsEdit(memory1()))
-		assert.False(t, sazed.NeedsEdit(memory2()))
-		assert.False(t, sazed.NeedsEdit(memory3()))
-		assert.False(t, sazed.NeedsEdit(memory4()))
-		assert.False(t, sazed.NeedsEdit(memory5()))
-	})
+	assert.False(t, sazed.NeedsEdit(memory1()))
+	assert.False(t, sazed.NeedsEdit(memory2()))
+	assert.False(t, sazed.NeedsEdit(memory3()))
+	assert.True(t, sazed.NeedsEdit(memory4()))
+	assert.True(t, sazed.NeedsEdit(memory5()))
 }
