@@ -7,10 +7,6 @@ test: ARGS=
 test:
 	go test -v $(ARGS) .
 
-.PHONY: fmt
-fmt:
-	go fmt .
-
 .PHONY: lint
 lint:
 	docker compose run --rm golangci
