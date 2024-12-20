@@ -3,7 +3,7 @@ module github.com/vitorqb/sazed
 go 1.23.0
 
 require (
-	github.com/caarlos0/env/v11 v11.2.2
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.1.0
 	github.com/sahilm/fuzzy v0.1.1
