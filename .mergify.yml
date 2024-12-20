@@ -1,11 +1,5 @@
 queue_rules:
   
-  - name: renovate
-    queue_conditions:
-      - 'author = renovate[bot]'
-      - '#commits-behind = 0'
-    merge_method: rebase
-  
   - name: default
     queue_conditions:
       - 'author != renovate[bot]'
@@ -19,3 +13,11 @@ pull_request_rules:
     conditions: []
     actions:
       queue:
+
+  - name: Automatic merge renovate
+    conditions:
+      - 'author = renovate[bot]'
+      - '#commits-behind = 0'
+    actions:
+      merge:
+        method: rebase
