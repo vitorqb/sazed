@@ -1,6 +1,6 @@
 DELVE_VERSION := 1.23.1
 
-default: test lint
+default: test lint run
 
 .PHONY: test
 test: ARGS=
