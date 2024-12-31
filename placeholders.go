@@ -1,35 +1,36 @@
 package main
 
+import "strings"
+
 func CountPlaceholders(s string) int {
 	return len(GetPlaceholders(s))
 }
 
 type Placeholder struct {
-	Beg  int
-	End  int
-	Name string
+	Name    string
+	Pattern string
 }
 
 func GetPlaceholders(s string) []Placeholder {
 	insideBrackets := false
 	placeholders := []Placeholder{}
-	currentPlaceholder := Placeholder{}
+	currentPlaceholder := Placeholder{Pattern: "{{"}
 	for i := 0; i < len(s)-1; i++ {
 		char := s[i]
 		nextChar := s[i+1]
 		if insideBrackets {
 			if char == '}' && nextChar == '}' {
 				insideBrackets = false
-				currentPlaceholder.End = i + 1
+				currentPlaceholder.Pattern += "}}"
 				placeholders = append(placeholders, currentPlaceholder)
-				currentPlaceholder = Placeholder{}
+				currentPlaceholder = Placeholder{Pattern: "{{"}
 			} else {
 				currentPlaceholder.Name += string(char)
+				currentPlaceholder.Pattern += string(char)
 			}
 		} else {
 			if char == '{' && nextChar == '{' {
 				insideBrackets = true
-				currentPlaceholder.Beg = i
 				i++
 			}
 		}
@@ -37,32 +38,49 @@ func GetPlaceholders(s string) []Placeholder {
 	return placeholders
 }
 
-func NextPlaceholder(s string) (p Placeholder, success bool) {
-	placeholders := GetPlaceholders(s)
-	if len(placeholders) == 0 {
-		return Placeholder{}, false
+// Represents options for rendering a single placeholder
+type RenderOpts struct {
+	Optional bool
+	Prefix   string
+}
+
+// Given a string `s`, replace the placeholder `p` using `userInput` and `opts`. Returns
+// the full string.
+func ReplacePlaceholder(s string, p Placeholder, replacement string, opts RenderOpts) string {
+	// Not optional and no replacement - leave it there
+	if !opts.Optional && replacement == "" {
+		return s
 	}
-	return placeholders[0], true
+
+	// Optional and no replacement
+	if opts.Optional && replacement == "" {
+		// If we the pattern is surrounded by spaces, replace all of it to a single space.
+		patternWithSpaces := " " + p.Pattern + " "
+		if strings.Contains(s, patternWithSpaces) {
+			return strings.ReplaceAll(s, patternWithSpaces, " ")
+		}
+		// Otherwise just replace the pattern
+		return strings.ReplaceAll(s, p.Pattern, replacement)
+	}
+
+	// We have a replacement
+	replacement = opts.Prefix + replacement
+	return strings.ReplaceAll(s, p.Pattern, replacement)
 }
 
-func ReplacePlaceholder(s string, p Placeholder, replacement string) string {
-	beg := s[:p.Beg]
-	end := s[p.End+1:]
-	return beg + replacement + end
-}
-
-// Given a string `s` with placeholders like `{{foo}}`, replace them with the values in `placeholderValues`. The `i`th placeholder should be replaced with the `i`th value in `placeholderValues`.
-func Render(s string, placeholderValues []string) string {
-	for i := 0; true; i++ {
-		placeholder, success := NextPlaceholder(s)
-		if !success {
-			break
+// Gven a string `s` with placeholders like `{{foo}}`, render each placeholder
+// using inputs from `userInputs` and options from `placeholdeOpts`
+func Render(s string, userInputs []string, renderOpts []RenderOpts) string {
+	for i, placeholder := range GetPlaceholders(s) {
+		var userInput string
+		if i < len(userInputs) {
+			userInput = userInputs[i]
 		}
-		value := ""
-		if i < len(placeholderValues) {
-			value = placeholderValues[i]
+		var renderOpt RenderOpts
+		if i < len(renderOpts) {
+			renderOpt = renderOpts[i]
 		}
-		s = ReplacePlaceholder(s, placeholder, value)
+		s = ReplacePlaceholder(s, placeholder, userInput, renderOpt)
 	}
 	return s
 }
