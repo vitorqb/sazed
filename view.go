@@ -32,7 +32,8 @@ func ViewCommandEdit(m Model) string {
 	// Displays the command with the placeholders replaced by the values
 	originalCmd := m.SelectedMemory.Command
 	placeholderValues := m.GetPlaceholderValues()
-	renderedCmd := Render(originalCmd, placeholderValues)
+	// !!!! Replace by real options
+	renderedCmd := Render(originalCmd, placeholderValues, []RenderOpts{})
 	stringBuilder := strings.Builder{}
 	stringBuilder.WriteString("Command: ")
 	stringBuilder.WriteString(renderedCmd)

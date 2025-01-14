@@ -1,12 +1,25 @@
 - command: 'docker ps -a -q | xargs -I{} docker stop {} && docker ps -a -q | xargs -I{} docker rm {}'
   description: Stop all running docker containers
+
 - command: "git config --local user.email 'myemail@gmail.com' && git config --local user.name 'Some User'"
   description: Configures git to Some User
+
 - command: find -iname '*.{{ext}}'
   description: Finds all files with common extension
+
 - command: sudo systemctl restart iwd
   description: Restarts iwd
+
 - command: echo {{arg}}
   description: Echos something
+
 - command: echo {{arg1}} {{arg2}}
   description: Echos two things
+
+- command: grep {{exclude-dir}}
+  description: Generic grep
+  arguments:
+    grep:
+      exclude-dir:
+        optional: true
+        prefix: "--exclude-dir="
