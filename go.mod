@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/charmbracelet/bubbles v0.20.0
-	github.com/charmbracelet/bubbletea v1.3.2
+	github.com/charmbracelet/bubbletea v1.3.3
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v3 v3.0.1
