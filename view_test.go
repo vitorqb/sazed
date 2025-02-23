@@ -14,14 +14,14 @@ func TestViewCommandEdit(t *testing.T) {
 		model.SelectedMemory = sazed.Memory{Command: "foo {{bar}} baz"}
 		view := sazed.ViewCommandEdit(model)
 		lines := strings.Split(view, "\n")
-		assert.Equal(t, "Command: foo  baz", lines[0])
+		assert.Equal(t, "Command: foo {{bar}} baz", lines[0])
 	})
 	t.Run("Renders command on the first line (multiple placeholders)", func(t *testing.T) {
 		model := sazed.InitialModel(sazed.AppOptions{})
 		model.SelectedMemory = memory5()
 		view := sazed.ViewCommandEdit(model)
 		lines := strings.Split(view, "\n")
-		assert.Equal(t, "Command: echo   end", lines[0])
+		assert.Equal(t, "Command: echo {{value1}} {{value2}} end", lines[0])
 	})
 	t.Run("Replaces placeholders for user input", func(t *testing.T) {
 		model := sazed.InitialModel(sazed.AppOptions{})
