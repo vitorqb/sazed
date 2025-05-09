@@ -3,7 +3,7 @@ DELVE_VERSION := 1.23.1
 default: test lint run
 
 .PHONY: test
-test: ARGS=
+test: ARGS=--timeout=2s
 test:
 	go test -v $(ARGS) .
 
