@@ -28,7 +28,7 @@ jobs:
   Renovate-Config-Validation:
     runs-on: ubuntu-latest
     container:
-      image: renovate/renovate:41.167
+      image: renovate/renovate:41.168
       options: --user root
     steps:
       - name: "Check out repository code"
