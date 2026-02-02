@@ -352,7 +352,7 @@ func Test__View(t *testing.T) {
 
 		// Find key lines to test
 		assert.Equal(t, sazed.PageEdit, m.(sazed.Model).CurrentPage)
-		assert.Equal(t, "Command: echo ", rendered[0])
+		assert.Equal(t, "Command: echo {{value}}", rendered[0])
 	})
 }
 

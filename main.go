@@ -212,7 +212,8 @@ func SubmitPlaceholderValueFromInput(m Model) (Model, tea.Cmd) {
 		for i, input := range m.EditTextInputs {
 			placeholderValues[i] = input.Value()
 		}
-		rendered := Render(m.SelectedMemory.Command, placeholderValues)
+		// !!!! TODO Pass read render opts
+		rendered := Render(m.SelectedMemory.Command, placeholderValues, []RenderOpts{})
 		return m, QuitWithOutput(rendered)
 	}
 
