@@ -5,7 +5,7 @@ go 1.24.2
 toolchain go1.24.11
 
 require (
-	github.com/caarlos0/env/v11 v11.3.1
+	github.com/caarlos0/env/v11 v11.4.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/sahilm/fuzzy v0.1.1
