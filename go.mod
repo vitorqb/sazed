@@ -2,7 +2,7 @@ module github.com/vitorqb/sazed
 
 go 1.24.2
 
-toolchain go1.24.11
+toolchain go1.26.0
 
 require (
 	github.com/caarlos0/env/v11 v11.4.0
