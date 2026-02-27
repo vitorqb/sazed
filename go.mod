@@ -7,7 +7,7 @@ toolchain go1.24.11
 require (
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/charmbracelet/bubbles v1.0.0
-	github.com/charmbracelet/bubbletea v1.3.10
+	github.com/charmbracelet/bubbletea/v2 v2.0.0
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
